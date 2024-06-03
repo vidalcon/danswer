@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import { FiSend, FiFilter, FiPlusCircle, FiCpu } from "react-icons/fi";
+import { FiSend, FiFilter, FiPlusCircle, FiCpu, FiStopCircle } from "react-icons/fi";
 import ChatInputOption from "./ChatInputOption";
 import { FaBrain } from "react-icons/fa";
 import { Persona } from "@/app/admin/assistants/interfaces";
@@ -119,11 +119,10 @@ export function ChatInputBar({
                 resize-none
                 border-0
                 bg-transparent
-                ${
-                  textAreaRef.current &&
+                ${textAreaRef.current &&
                   textAreaRef.current.scrollHeight > MAX_INPUT_HEIGHT
-                    ? "overflow-y-auto mt-2"
-                    : ""
+                  ? "overflow-y-auto mt-2"
+                  : ""
                 }
                 whitespace-normal
                 break-word
@@ -200,25 +199,41 @@ export function ChatInputBar({
               />
             </div>
             <div className="absolute bottom-2.5 right-10">
-              <div
-                className="cursor-pointer"
-                onClick={() => {
-                  if (!isStreaming) {
+              {!isStreaming ?
+                <div
+                  className="cursor-pointer"
+                  onClick={() => {
+
                     if (message) {
                       onSubmit();
                     }
-                  } else {
-                    setIsCancelled(true);
+                    else {
+                      setIsCancelled(true);
+                    }
                   }
-                }}
-              >
-                <FiSend
-                  size={18}
-                  className={`text-emphasis w-9 h-9 p-2 rounded-lg ${
-                    message ? "bg-blue-200" : ""
-                  }`}
-                />
-              </div>
+                  }
+                >
+                  <FiSend
+                    size={18}
+                    className={`text-emphasis w-9 h-9 p-2 rounded-lg ${message ? "bg-blue-200" : ""
+                      }`}
+                  />
+                </div>
+                :
+                <div
+                  className="cursor-pointer"
+                  onClick={() => {
+
+                    setIsCancelled(true);
+
+                  }}
+                >
+                  <FiStopCircle
+                    size={18}
+                    className={`text-emphasis w-9 h-9 p-2 rounded-lg ${message ? "bg-blue-200" : ""
+                      }`}
+                  />
+                </div>}
             </div>
           </div>
         </div>

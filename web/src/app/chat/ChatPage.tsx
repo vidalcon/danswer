@@ -389,6 +389,8 @@ export function ChatPage({
 
   // state for cancelling streaming
   const [isCancelled, setIsCancelled] = useState(false);
+
+  
   const isCancelledRef = useRef(isCancelled);
   useEffect(() => {
     isCancelledRef.current = isCancelled;

@@ -77,6 +77,8 @@ import { TbLayoutSidebarRightExpand } from "react-icons/tb";
 import { SIDEBAR_WIDTH_CONST } from "@/lib/constants";
 
 import ResizableSection from "@/components/resizable/ResizableSection";
+import { PersonaSelector } from "@/components/search/PersonaSelector";
+import { Button } from "@tremor/react";
 
 const MAX_INPUT_HEIGHT = 200;
 const TEMP_USER_MESSAGE_ID = -1;
@@ -105,6 +107,15 @@ export function ChatPage({
   } = useChatContext();
 
   const filteredAssistants = orderAssistantsForUser(availablePersonas, user);
+
+  const [selectedAlternativeAssistant, setSelectedAlternativeAssistant] =
+    useState<Persona | null>(filteredAssistants[1]);
+
+  const updateAlternativeAssistant = (
+    newAlternativeAssistant: Persona | null
+  ) => {
+    setSelectedAlternativeAssistant(newAlternativeAssistant);
+  };
 
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -211,6 +222,7 @@ export function ChatPage({
       const response = await fetch(
         `/api/chat/get-chat-session/${existingChatSessionId}`
       );
+
       const chatSession = (await response.json()) as BackendChatSession;
 
       setSelectedPersona(
@@ -348,6 +360,7 @@ export function ChatPage({
     setCompleteMessageMap(newCompleteMessageMap);
     return newCompleteMessageMap;
   };
+
   const messageHistory = buildLatestMessageChain(completeMessageMap);
   const [isStreaming, setIsStreaming] = useState(false);
 
@@ -619,8 +632,7 @@ export function ChatPage({
         getLastSuccessfulMessageId(currMessageHistory);
       for await (const packetBunch of sendMessage({
         message: currMessage,
-        // TODO actually pass in an id. This is functioal
-        alternateAssistantId: undefined,
+        alternateAssistantId: selectedAlternativeAssistant?.id,
         fileDescriptors: currentMessageFiles,
         parentMessageId: lastSuccessfulMessageId,
         chatSessionId: currChatSessionId,
@@ -727,6 +739,7 @@ export function ChatPage({
             files: finalMessage?.files || aiMessageImages || [],
             toolCalls: finalMessage?.tool_calls || toolCalls,
             parentMessageId: newUserMessageId,
+            alternateAssistantID: selectedAlternativeAssistant?.id,
           },
         ]);
         if (isCancelledRef.current) {
@@ -1111,8 +1124,21 @@ export function ChatPage({
                                 i === messageHistory.length - 1);
                             const previousMessage =
                               i !== 0 ? messageHistory[i - 1] : null;
+
+                            const currentAlternativeAssistant =
+                              message.alternateAssistantID
+                                ? availablePersonas.find(
+                                    (persona) =>
+                                      persona.id ===
+                                      message.alternateAssistantID
+                                  )
+                                : null;
+
                             return (
                               <AIMessage
+                                alternativeAssistant={
+                                  currentAlternativeAssistant
+                                }
                                 key={message.messageId}
                                 messageId={message.messageId}
                                 content={message.message}
@@ -1222,13 +1248,15 @@ export function ChatPage({
                             );
                           }
                         })}
-
                         {isStreaming &&
                           messageHistory.length > 0 &&
                           messageHistory[messageHistory.length - 1].type ===
                             "user" && (
                             <div key={messageHistory.length}>
                               <AIMessage
+                                alternativeAssistant={
+                                  selectedAlternativeAssistant
+                                }
                                 messageId={null}
                                 personaName={livePersona.name}
                                 content={
@@ -1297,6 +1325,11 @@ export function ChatPage({
                     <div className="absolute bottom-0 z-10 w-full">
                       <div className="w-full pb-4">
                         <ChatInputBar
+                          updateAlternativeAssistant={
+                            updateAlternativeAssistant
+                          }
+                          // tempAlter
+                          alternativeAssistant={selectedAlternativeAssistant}
                           message={message}
                           setMessage={setMessage}
                           onSubmit={onSubmit}

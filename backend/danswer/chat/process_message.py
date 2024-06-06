@@ -235,8 +235,6 @@ def stream_chat_message_objects(
             )
         else:
             persona = chat_session.persona
-        print("persona")
-        print(persona)
 
         prompt_id = new_msg_req.prompt_id
         if prompt_id is None and persona.prompts:
@@ -246,13 +244,13 @@ def stream_chat_message_objects(
             raise RuntimeError(
                 "Must specify a set of documents for chat or specify search options"
             )
-
         try:
             llm = get_llm_for_persona(
                 persona=persona,
                 llm_override=new_msg_req.llm_override or chat_session.llm_override,
                 additional_headers=litellm_additional_headers,
             )
+
         except GenAIDisabledException:
             raise RuntimeError("LLM is disabled. Can't use chat flow without LLM.")
 
@@ -277,6 +275,7 @@ def stream_chat_message_objects(
                 user_id=user_id,
                 db_session=db_session,
             )
+
         else:
             parent_message = root_message
 
@@ -403,84 +402,58 @@ def stream_chat_message_objects(
         if not final_msg.prompt:
             raise RuntimeError("No Prompt found")
 
-        prompt_config = PromptConfig.from_model(
-            final_msg.prompt,
-            prompt_override=(
-                new_msg_req.prompt_override or chat_session.prompt_override
-            ),
-        )
+        prompt_config = (
+            PromptConfig.from_model(
+                final_msg.prompt,
+                prompt_override=(
+                    new_msg_req.prompt_override or chat_session.prompt_override
+                ),
+            )
+            if not persona
+            else PromptConfig.from_model(persona.prompts[0])
+        ) 
 
         # find out what tools to use
         search_tool: SearchTool | None = None
-        tool_dict: dict[int, list[Tool]] = {}  # tool_id to tool
-        for db_tool_model in persona.tools:
-            # handle in-code tools specially
-            if db_tool_model.in_code_tool_id:
-                tool_cls = get_built_in_tool_by_id(db_tool_model.id, db_session)
-                if tool_cls.__name__ == SearchTool.__name__ and not latest_query_files:
-                    search_tool = SearchTool(
-                        db_session=db_session,
-                        user=user,
-                        persona=persona,
-                        retrieval_options=retrieval_options,
-                        prompt_config=prompt_config,
-                        llm=llm,
-                        pruning_config=document_pruning_config,
-                        selected_docs=selected_llm_docs,
-                        chunks_above=new_msg_req.chunks_above,
-                        chunks_below=new_msg_req.chunks_below,
-                        full_doc=new_msg_req.full_doc,
-                    )
-                    tool_dict[db_tool_model.id] = [search_tool]
-                elif tool_cls.__name__ == ImageGenerationTool.__name__:
-                    dalle_key = None
-                    if (
-                        llm
-                        and llm.config.api_key
-                        and llm.config.model_provider == "openai"
-                    ):
-                        dalle_key = llm.config.api_key
-                    else:
-                        llm_providers = fetch_existing_llm_providers(db_session)
-                        openai_provider = next(
-                            iter(
-                                [
-                                    llm_provider
-                                    for llm_provider in llm_providers
-                                    if llm_provider.provider == "openai"
-                                ]
-                            ),
-                            None,
-                        )
-                        if not openai_provider or not openai_provider.api_key:
-                            raise ValueError(
-                                "Image generation tool requires an OpenAI API key"
-                            )
-                        dalle_key = openai_provider.api_key
-                    tool_dict[db_tool_model.id] = [
-                        ImageGenerationTool(api_key=dalle_key)
-                    ]
-
-                continue
-
-            # handle all custom tools
-            if db_tool_model.openapi_schema:
-                tool_dict[db_tool_model.id] = cast(
-                    list[Tool],
-                    build_custom_tools_from_openapi_schema(
-                        db_tool_model.openapi_schema
-                    ),
-                )
-
         tools: list[Tool] = []
-        for tool_list in tool_dict.values():
-            tools.extend(tool_list)
-
-        # factor in tool definition size when pruning
-        document_pruning_config.tool_num_tokens = compute_all_tool_tokens(tools)
-        document_pruning_config.using_tool_message = explicit_tool_calling_supported(
-            llm.config.model_provider, llm.config.model_name
-        )
+        for tool_cls in persona_tool_classes:
+            if tool_cls.__name__ == SearchTool.__name__ and not latest_query_files:
+                search_tool = SearchTool(
+                    db_session=db_session,
+                    user=user,
+                    persona=persona,
+                    retrieval_options=retrieval_options,
+                    prompt_config=prompt_config,
+                    llm=llm,
+                    pruning_config=document_pruning_config,
+                    selected_docs=selected_llm_docs,
+                    chunks_above=new_msg_req.chunks_above,
+                    chunks_below=new_msg_req.chunks_below,
+                    full_doc=new_msg_req.full_doc,
+                )
+                tools.append(search_tool)
+            elif tool_cls.__name__ == ImageGenerationTool.__name__:
+                dalle_key = None
+                if llm and llm.config.api_key and llm.config.model_provider == "openai":
+                    dalle_key = llm.config.api_key
+                else:
+                    llm_providers = fetch_existing_llm_providers(db_session)
+                    openai_provider = next(
+                        iter(
+                            [
+                                llm_provider
+                                for llm_provider in llm_providers
+                                if llm_provider.provider == "openai"
+                            ]
+                        ),
+                        None,
+                    )
+                    if not openai_provider or not openai_provider.api_key:
+                        raise ValueError(
+                            "Image generation tool requires an OpenAI API key"
+                        )
+                    dalle_key = openai_provider.api_key
+                tools.append(ImageGenerationTool(api_key=dalle_key))
 
         # LLM prompt building, response capturing, etc.
         answer = Answer(

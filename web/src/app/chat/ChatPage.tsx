@@ -991,6 +991,7 @@ export function ChatPage({
                     {...getRootProps()}
                   >
                     {/* <input {...getInputProps()} /> */}
+
                     <div
                       className={`w-full h-full flex flex-col overflow-y-auto overflow-x-hidden relative`}
                       ref={scrollableDivRef}
@@ -1131,6 +1132,7 @@ export function ChatPage({
 
                             return (
                               <AIMessage
+                                currentPersona={livePersona}
                                 alternativeAssistant={
                                   currentAlternativeAssistant
                                 }
@@ -1231,6 +1233,7 @@ export function ChatPage({
                             return (
                               <div key={i}>
                                 <AIMessage
+                                  currentPersona={livePersona}
                                   messageId={message.messageId}
                                   personaName={livePersona.name}
                                   content={
@@ -1249,6 +1252,7 @@ export function ChatPage({
                             "user" && (
                             <div key={messageHistory.length}>
                               <AIMessage
+                                currentPersona={livePersona}
                                 alternativeAssistant={
                                   selectedAlternativeAssistant
                                 }

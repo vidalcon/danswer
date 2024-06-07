@@ -1052,7 +1052,6 @@ export function ChatPage({
                         !isStreaming && (
                           <ChatIntro
                             availableSources={finalAvailableSources}
-                            availablePersonas={filteredAssistants}
                             selectedPersona={livePersona}
                           />
                         )}

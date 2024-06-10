@@ -410,6 +410,7 @@ export function ChatPage({
   // just choose a conservative default, this will be updated in the
   // background on initial load / on persona change
   const [maxTokens, setMaxTokens] = useState<number>(4096);
+
   // fetch # of allowed document tokens for the selected Persona
   useEffect(() => {
     async function fetchMaxTokens() {
@@ -515,12 +516,14 @@ export function ChatPage({
     queryOverride,
     forceSearch,
     isSeededChat,
+    alternativeAssistant = null,
   }: {
     messageIdToResend?: number;
     messageOverride?: string;
     queryOverride?: string;
     forceSearch?: boolean;
     isSeededChat?: boolean;
+    alternativeAssistant?: Persona | null;
   } = {}) => {
     let currChatSessionId: number;
     let isNewSession = chatSessionId === null;
@@ -626,7 +629,9 @@ export function ChatPage({
         getLastSuccessfulMessageId(currMessageHistory);
       for await (const packetBunch of sendMessage({
         message: currMessage,
-        alternateAssistantId: selectedAlternativeAssistant?.id,
+        alternateAssistantId: alternativeAssistant
+          ? alternativeAssistant.id
+          : selectedAlternativeAssistant?.id,
         fileDescriptors: currentMessageFiles,
         parentMessageId: lastSuccessfulMessageId,
         chatSessionId: currChatSessionId,
@@ -913,6 +918,8 @@ export function ChatPage({
   const innerSidebarElementRef = useRef<HTMLDivElement>(null);
 
   const currentPersona = selectedAlternativeAssistant || livePersona;
+  const overallRetrievalDisabled = !personaIncludesRetrieval(livePersona);
+  const currentRetrievalDisabled = !personaIncludesRetrieval(currentPersona);
 
   return (
     <>
@@ -1190,6 +1197,8 @@ export function ChatPage({
                                           messageIdToResend:
                                             previousMessage.messageId,
                                           queryOverride: newQuery,
+                                          alternativeAssistant:
+                                            currentAlternativeAssistant,
                                         });
                                       }
                                     : undefined
@@ -1226,7 +1235,13 @@ export function ChatPage({
                                     });
                                   }
                                 }}
-                                retrievalDisabled={retrievalDisabled}
+                                retrievalDisabled={
+                                  currentAlternativeAssistant
+                                    ? !personaIncludesRetrieval(
+                                        currentAlternativeAssistant!
+                                      )
+                                    : overallRetrievalDisabled
+                                }
                               />
                             );
                           } else {
@@ -1333,7 +1348,9 @@ export function ChatPage({
                           onSubmit={onSubmit}
                           isStreaming={isStreaming}
                           setIsCancelled={setIsCancelled}
-                          retrievalDisabled={retrievalDisabled}
+                          retrievalDisabled={
+                            !personaIncludesRetrieval(currentPersona)
+                          }
                           filterManager={filterManager}
                           llmOverrideManager={llmOverrideManager}
                           selectedAssistant={livePersona}

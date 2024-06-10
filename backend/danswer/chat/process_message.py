@@ -227,6 +227,7 @@ def stream_chat_message_objects(
         reference_doc_ids = new_msg_req.search_doc_ids
         retrieval_options = new_msg_req.retrieval_options
         alternate_assistant_id = new_msg_req.alternate_assistant_id
+        # print(new_msg_req.__dict__)
 
         # use alernate persona if alternative assistant id is passed in
         if alternate_assistant_id:
@@ -402,19 +403,6 @@ def stream_chat_message_objects(
         if not final_msg.prompt:
             raise RuntimeError("No Prompt found")
 
-        print("The various prompts")
-
-        print(
-            PromptConfig.from_model(
-                final_msg.prompt,
-                prompt_override=(
-                    new_msg_req.prompt_override or chat_session.prompt_override
-                ),
-            )
-        )
-
-        print(PromptConfig.from_model(persona.prompts[0]))
-
         prompt_config = (
             PromptConfig.from_model(
                 final_msg.prompt,
@@ -424,11 +412,26 @@ def stream_chat_message_objects(
             )
             if not persona
             else PromptConfig.from_model(persona.prompts[0])
-        ) 
+        )
+        # print(persona.tools)
+        persona_tool_classes = [
+            get_tool_cls(tool, db_session) for tool in persona.tools
+        ]
 
-        # find out what tools to use
+        # factor in tool definition size when pruning
+        document_pruning_config.tool_num_tokens = compute_all_tool_tokens(
+            persona_tool_classes
+        )
+        document_pruning_config.using_tool_message = explicit_tool_calling_supported(
+            llm.config.model_provider, llm.config.model_name
+        )
+
+        # NOTE: for now, only support SearchTool and ImageGenerationTool
+        # in the future, will support arbitrary user-defined tools
         search_tool: SearchTool | None = None
         tools: list[Tool] = []
+        # print(persona_tool_classes)
+
         for tool_cls in persona_tool_classes:
             if tool_cls.__name__ == SearchTool.__name__ and not latest_query_files:
                 search_tool = SearchTool(
@@ -515,9 +518,11 @@ def stream_chat_message_objects(
                         db_session=db_session,
                         selected_search_docs=selected_db_search_docs,
                         # Deduping happens at the last step to avoid harming quality by dropping content early on
-                        dedupe_docs=retrieval_options.dedupe_docs
-                        if retrieval_options
-                        else False,
+                        dedupe_docs=(
+                            retrieval_options.dedupe_docs
+                            if retrieval_options
+                            else False
+                        ),
                     )
                     yield qa_docs_response
                 elif packet.id == SECTION_RELEVANCE_LIST_ID:

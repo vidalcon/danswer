@@ -43,6 +43,7 @@ from danswer.tools.images.image_generation_tool import IMAGE_GENERATION_RESPONSE
 from danswer.tools.images.image_generation_tool import ImageGenerationResponse
 from danswer.tools.images.image_generation_tool import ImageGenerationTool
 from danswer.tools.images.prompt import build_image_generation_user_prompt
+from danswer.tools.internet_search.internet_search_tool import InternetSearchTool
 from danswer.tools.message import build_tool_message
 from danswer.tools.message import ToolCallSummary
 from danswer.tools.search.search_tool import FINAL_CONTEXT_DOCUMENTS
@@ -58,6 +59,9 @@ from danswer.tools.tool_runner import ToolCallFinalResult
 from danswer.tools.tool_runner import ToolCallKickoff
 from danswer.tools.tool_runner import ToolRunner
 from danswer.tools.utils import explicit_tool_calling_supported
+from danswer.utils.logger import setup_logger
+
+logger = setup_logger()
 
 
 def _get_answer_stream_processor(
@@ -250,7 +254,8 @@ class Answer:
                         query=self.question,
                     )
                 )
-
+            elif tool.name() == InternetSearchTool.NAME:
+                self._update_prompt_builder_for_search_tool(prompt_builder, [])
             yield tool_runner.tool_final_result()
 
             prompt = prompt_builder.build(tool_call_summary=tool_call_summary)
@@ -309,6 +314,7 @@ class Answer:
             for ind, args in enumerate(all_tool_args):
                 if args is not None:
                     chosen_tool_and_args = (self.tools[ind], args)
+                    # TODO: Don't just pick the first tool selected
                     # for now, just pick the first tool selected
                     break
 
@@ -331,7 +337,7 @@ class Answer:
         tool_runner = ToolRunner(tool, tool_args)
         yield tool_runner.kickoff()
 
-        if tool.name() == SearchTool.NAME:
+        if tool.name() in {SearchTool.NAME, InternetSearchTool.NAME}:
             final_context_documents = None
             for response in tool_runner.tool_responses():
                 if response.id == FINAL_CONTEXT_DOCUMENTS:
@@ -339,7 +345,7 @@ class Answer:
                 yield response
 
             if final_context_documents is None:
-                raise RuntimeError("SearchTool did not return final context documents")
+                raise RuntimeError(f"{tool.name()} did not return final context documents")
 
             self._update_prompt_builder_for_search_tool(
                 prompt_builder, final_context_documents

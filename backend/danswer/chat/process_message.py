@@ -14,7 +14,7 @@ from danswer.chat.models import LlmDoc
 from danswer.chat.models import LLMRelevanceFilterResponse
 from danswer.chat.models import QADocsResponse
 from danswer.chat.models import StreamingError
-from danswer.configs.chat_configs import CHAT_TARGET_CHUNK_PERCENTAGE
+from danswer.configs.chat_configs import BING_API_KEY, CHAT_TARGET_CHUNK_PERCENTAGE
 from danswer.configs.chat_configs import DISABLE_LLM_CHOOSE_SEARCH
 from danswer.configs.chat_configs import MAX_CHUNKS_FED_TO_CHAT
 from danswer.configs.constants import MessageType
@@ -48,9 +48,9 @@ from danswer.llm.answering.models import PromptConfig
 from danswer.llm.exceptions import GenAIDisabledException
 from danswer.llm.factory import get_llm_for_persona
 from danswer.llm.utils import get_default_llm_tokenizer
-from danswer.search.enums import OptionalSearchSetting
+from danswer.search.enums import OptionalSearchSetting, QueryFlow, SearchType
 from danswer.search.retrieval.search_runner import inference_documents_from_ids
-from danswer.search.utils import chunks_or_sections_to_search_docs
+from danswer.search.utils import chunks_or_sections_to_search_docs, internet_search_response_to_search_docs
 from danswer.search.utils import dedupe_documents
 from danswer.search.utils import drop_llm_indices
 from danswer.server.query_and_chat.models import ChatMessageDetail
@@ -64,6 +64,7 @@ from danswer.tools.force import ForceUseTool
 from danswer.tools.images.image_generation_tool import IMAGE_GENERATION_RESPONSE_ID
 from danswer.tools.images.image_generation_tool import ImageGenerationResponse
 from danswer.tools.images.image_generation_tool import ImageGenerationTool
+from danswer.tools.internet_search.internet_search_tool import INTERNET_SEARCH_RESPONSE_ID, InternetSearchResponse, InternetSearchTool
 from danswer.tools.search.search_tool import SEARCH_RESPONSE_SUMMARY_ID
 from danswer.tools.search.search_tool import SearchResponseSummary
 from danswer.tools.search.search_tool import SearchTool
@@ -139,6 +140,36 @@ def _handle_search_tool_response_summary(
         reference_db_search_docs,
         dropped_inds,
     )
+
+
+def _handle_internet_search_tool_response_summary(
+    packet: ToolResponse,
+    db_session: Session,
+) -> tuple[QADocsResponse, list[DbSearchDoc]]:
+    internet_search_response = cast(InternetSearchResponse, packet.response)
+    server_search_docs = internet_search_response_to_search_docs(internet_search_response)
+
+    reference_db_search_docs = [
+        create_db_search_doc(server_search_doc=doc, db_session=db_session)
+        for doc in server_search_docs
+    ]
+    response_docs = [
+        translate_db_search_doc_to_server_search_doc(db_search_doc)
+        for db_search_doc in reference_db_search_docs
+    ]
+    return (
+        QADocsResponse(
+            rephrased_query=internet_search_response.revised_query,
+            top_documents=response_docs,
+            predicted_flow=QueryFlow.QUESTION_ANSWER,
+            predicted_search=SearchType.INTERNET,
+            applied_source_filters=[],
+            applied_time_cutoff=None,
+            recency_bias_multiplier=1.0,
+        ),
+        reference_db_search_docs,
+    )
+
 
 
 def _check_should_force_search(
@@ -446,6 +477,15 @@ def stream_chat_message_objects(
                     tool_dict[db_tool_model.id] = [
                         ImageGenerationTool(api_key=dalle_key)
                     ]
+                elif tool_cls.__name__ == InternetSearchTool.__name__:
+                    bing_api_key = BING_API_KEY
+                    if not bing_api_key:
+                        raise ValueError(
+                            "Internet search tool requires a Bing API key"
+                        )
+                    tool_dict[db_tool_model.id] = [
+                        InternetSearchTool(api_key=bing_api_key)
+                    ]
 
                 continue
 
@@ -548,6 +588,15 @@ def stream_chat_message_objects(
                     yield ImageGenerationDisplay(
                         file_ids=[str(file_id) for file_id in file_ids]
                     )
+                elif packet.id == INTERNET_SEARCH_RESPONSE_ID:
+                    (
+                        qa_docs_response,
+                        reference_db_search_docs,
+                    ) = _handle_internet_search_tool_response_summary(
+                        packet=packet,
+                        db_session=db_session,
+                    )
+                    yield qa_docs_response
                 elif packet.id == CUSTOM_TOOL_RESPONSE_ID:
                     custom_tool_response = cast(CustomToolCallSummary, packet.response)
                     yield CustomToolResponse(

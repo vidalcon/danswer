@@ -66,7 +66,7 @@ class ImageGenerationTool(Tool):
 
     def name(self) -> str:
         return self.NAME
-    
+
     def description(self) -> str:
         return self.DESCRIPTION
 

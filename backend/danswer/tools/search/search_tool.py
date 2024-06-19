@@ -57,6 +57,7 @@ HINT: if you are unfamiliar with the user input OR think the user input is a typ
 
 class SearchTool(Tool):
     NAME = "run_search"
+    DESCRIPTION = search_tool_description
 
     def __init__(
         self,
@@ -92,6 +93,9 @@ class SearchTool(Tool):
 
     def name(self) -> str:
         return self.NAME
+    
+    def description(self) -> str:
+        return self.DESCRIPTION
 
     """For explicit tool calling"""
 
@@ -100,7 +104,7 @@ class SearchTool(Tool):
             "type": "function",
             "function": {
                 "name": self.name(),
-                "description": search_tool_description,
+                "description": self.description(),
                 "parameters": {
                     "type": "object",
                     "properties": {

@@ -152,7 +152,7 @@ export function AssistantEditor({
     ? findImageGenerationTool(tools)
     : undefined;
   const internetSearchTool = findInternetSearchTool(tools);
-  
+
   const customTools = tools.filter(
     (tool) =>
       tool.in_code_tool_id !== searchTool?.in_code_tool_id &&
@@ -624,16 +624,15 @@ export function AssistantEditor({
                       )}
 
                     {internetSearchTool && (
-                        <BooleanFormField
-                          name={`enabled_tools_map.${internetSearchTool.id}`}
-                          label="Internet Search Tool"
-                          subtext="The Internet Search Tool allows the assistant to search the internet for information." 
-                          onChange={() => {
-                            toggleToolInValues(internetSearchTool.id);
-                          }}
-                        />
-                      )}
-
+                      <BooleanFormField
+                        name={`enabled_tools_map.${internetSearchTool.id}`}
+                        label="Internet Search Tool"
+                        subtext="The Internet Search Tool allows the assistant to search the internet for information."
+                        onChange={() => {
+                          toggleToolInValues(internetSearchTool.id);
+                        }}
+                      />
+                    )}
 
                     {customTools.length > 0 && (
                       <>

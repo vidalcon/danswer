@@ -468,8 +468,8 @@ export function AssistantEditor({
                       <>
                         <BooleanFormField
                           name={`enabled_tools_map.${searchTool.id}`}
-                          label="Search Tool"
-                          subtext={`The Search Tool allows the Assistant to search through connected knowledge to help build an answer.`}
+                          label={searchTool.display_name}
+                          subtext={searchTool.description}
                           onChange={() => {
                             setFieldValue("num_chunks", null);
                             toggleToolInValues(searchTool.id);
@@ -615,8 +615,8 @@ export function AssistantEditor({
                       ) && (
                         <BooleanFormField
                           name={`enabled_tools_map.${imageGenerationTool.id}`}
-                          label="Image Generation Tool"
-                          subtext="The Image Generation Tool allows the assistant to use DALL-E 3 to generate images. The tool will be used when the user asks the assistant to generate an image."
+                          label={imageGenerationTool.display_name}
+                          subtext={imageGenerationTool.description}
                           onChange={() => {
                             toggleToolInValues(imageGenerationTool.id);
                           }}
@@ -626,8 +626,8 @@ export function AssistantEditor({
                     {internetSearchTool && (
                       <BooleanFormField
                         name={`enabled_tools_map.${internetSearchTool.id}`}
-                        label="Internet Search Tool"
-                        subtext="The Internet Search Tool allows the assistant to search the internet for information."
+                        label={internetSearchTool.display_name}
+                        subtext={internetSearchTool.description}
                         onChange={() => {
                           toggleToolInValues(internetSearchTool.id);
                         }}

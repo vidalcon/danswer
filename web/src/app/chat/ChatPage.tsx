@@ -49,7 +49,7 @@ import { DanswerInitializingLoader } from "@/components/DanswerInitializingLoade
 import { FeedbackModal } from "./modal/FeedbackModal";
 import { ShareChatSessionModal } from "./modal/ShareChatSessionModal";
 import { ChatPersonaSelector } from "./ChatPersonaSelector";
-import { FiShare2 } from "react-icons/fi";
+import { FiMenu, FiShare2 } from "react-icons/fi";
 import { ChatIntro } from "./ChatIntro";
 import { AIMessage, HumanMessage } from "./message/Messages";
 import { ThreeDots } from "react-loader-spinner";
@@ -75,6 +75,7 @@ import {
   SUB_HEADER,
 } from "@/lib/constants";
 import ResizableSection from "@/components/resizable/ResizableSection";
+import { BasicSelectable } from "@/components/BasicClickable";
 
 const MAX_INPUT_HEIGHT = 200;
 const TEMP_USER_MESSAGE_ID = -1;
@@ -879,6 +880,12 @@ export function ChatPage({
     setShowDocSidebar((showDocSidebar) => !showDocSidebar); // Toggle the state which will in turn toggle the class
   };
 
+  const [isChatSidebarOpen, setIsChatSidebarOpen] = useState(false);
+
+  const toggleChatSideBar = () => {
+    setIsChatSidebarOpen(!isChatSidebarOpen);
+  };
+
   const retrievalDisabled = !personaIncludesRetrieval(livePersona);
   const sidebarElementRef = useRef<HTMLDivElement>(null);
   const innerSidebarElementRef = useRef<HTMLDivElement>(null);
@@ -890,6 +897,8 @@ export function ChatPage({
 
       <div className="flex relative bg-background text-default overflow-x-hidden">
         <ChatSidebar
+          isChatSidebarOpen={isChatSidebarOpen}
+          toggleChatSideBar={toggleChatSideBar}
           existingChats={chatSessions}
           currentChatSession={selectedChatSession}
           folders={folders}
@@ -952,6 +961,7 @@ export function ChatPage({
                     className={`w-full  sm:relative h-screen ${
                       retrievalDisabled ? "pb-[111px]" : "pb-[140px]"
                     }
+
                       flex-auto transition-margin duration-300 
                       overflow-x-auto
                       `}
@@ -959,7 +969,7 @@ export function ChatPage({
                   >
                     {/* <input {...getInputProps()} /> */}
                     <div
-                      className={`w-full h-full flex  flex-col overflow-y-auto overflow-x-hidden relative`}
+                      className={`w-full h-full flex    flex-col overflow-y-auto overflow-x-hidden relative`}
                       ref={scrollableDivRef}
                     >
                       {livePersona && (
@@ -977,7 +987,20 @@ export function ChatPage({
                                 userId={user?.id}
                               />
                             </div>
-
+                            {settings?.isMobile && !isChatSidebarOpen && (
+                              <div
+                                onClick={toggleChatSideBar}
+                                className={`
+                                    rounded
+                                    cursor-pointer
+                                    px-2 
+                                    py-1
+                                    hover:bg-hover-light
+                                  `}
+                              >
+                                <FiMenu size={24} />
+                              </div>
+                            )}
                             <div className="ml-auto mr-3 mt-auto flex items-end">
                               {chatSessionId !== null && (
                                 <div
@@ -1023,7 +1046,10 @@ export function ChatPage({
 
                       <div
                         className={
-                          "mt-4 pt-12 sm:pt-0 mx-8" +
+                          `mt-4 pt-12 sm:pt-0
+                          w-searchbar-xs 
+                            2xl:w-searchbar-sm  
+                            3xl:w-searchbar mx-auto` +
                           (hasPerformedInitialScroll ? "" : " invisible")
                         }
                       >
@@ -1239,9 +1265,7 @@ export function ChatPage({
                               className={`
                             mx-auto 
                             px-4 
-                            w-searchbar-xs 
-                            2xl:w-searchbar-sm 
-                            3xl:w-searchbar 
+                             
                             grid 
                             gap-4 
                             grid-cols-1 

@@ -35,8 +35,8 @@ export const ChatSidebar = ({
   toggleChatSideBar,
   openedFolders,
 }: {
-  isChatSidebarOpen: boolean;
-  toggleChatSideBar: () => void;
+  isChatSidebarOpen?: boolean;
+  toggleChatSideBar?: () => void;
   existingChats: ChatSession[];
   currentChatSession: ChatSession | null | undefined;
   folders: Folder[];

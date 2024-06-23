@@ -502,6 +502,7 @@ export const HumanMessage = ({
                       setEditedContent(content);
                       setIsEditing(false);
                     }
+                    // Submit edit if "Command Enter", like ChatGPT
                     if (e.key === "Enter" && e.metaKey) {
                       handleEditSubmit();
                     }

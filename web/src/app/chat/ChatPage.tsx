@@ -242,19 +242,6 @@ export function ChatPage({
     initialSessionFetch();
   }, [existingChatSessionId]);
 
-  const [usedSidebarWidth, setUsedSidebarWidth] = useState<number>(
-    parseInt(SIDEBAR_WIDTH_CONST)
-  );
-
-  const updateSidebarWidth = (newWidth: number) => {
-    setUsedSidebarWidth(newWidth);
-    if (sidebarElementRef.current && innerSidebarElementRef.current) {
-      sidebarElementRef.current.style.transition = "";
-      sidebarElementRef.current.style.width = `${newWidth}px`;
-      innerSidebarElementRef.current.style.width = `${newWidth}px`;
-    }
-  };
-
   const [chatSessionId, setChatSessionId] = useState<number | null>(
     existingChatSessionId
   );
@@ -866,6 +853,10 @@ export function ChatPage({
     router.push("/search");
   }
 
+  const retrievalDisabled = !personaIncludesRetrieval(livePersona);
+  const sidebarElementRef = useRef<HTMLDivElement>(null);
+  const innerSidebarElementRef = useRef<HTMLDivElement>(null);
+
   const [showDocSidebar, setShowDocSidebar] = useState(true); // State to track if sidebar is open
 
   const toggleSidebar = () => {
@@ -886,9 +877,23 @@ export function ChatPage({
     setIsChatSidebarOpen(!isChatSidebarOpen);
   };
 
-  const retrievalDisabled = !personaIncludesRetrieval(livePersona);
-  const sidebarElementRef = useRef<HTMLDivElement>(null);
-  const innerSidebarElementRef = useRef<HTMLDivElement>(null);
+  const [usedSidebarWidth, setUsedSidebarWidth] = useState<number>(
+    parseInt(SIDEBAR_WIDTH_CONST)
+  );
+
+  const updateSidebarWidth = (newWidth: number) => {
+    setUsedSidebarWidth(newWidth);
+    if (
+      sidebarElementRef &&
+      sidebarElementRef.current &&
+      innerSidebarElementRef &&
+      innerSidebarElementRef.current
+    ) {
+      sidebarElementRef.current.style.transition = "";
+      sidebarElementRef.current.style.width = `${newWidth}px`;
+      innerSidebarElementRef.current.style.width = `${newWidth}px`;
+    }
+  };
 
   return (
     <>
@@ -905,10 +910,7 @@ export function ChatPage({
           openedFolders={openedFolders}
         />
 
-        <div
-          className=" flex w-full   overflow-x-hidden"
-          ref={masterFlexboxRef}
-        >
+        <div ref={masterFlexboxRef} className="flex w-full overflow-x-hidden">
           {popup}
           {currentFeedback && (
             <FeedbackModal
@@ -958,7 +960,7 @@ export function ChatPage({
               {({ getRootProps }) => (
                 <>
                   <div
-                    className={`w-full  sm:relative h-screen ${
+                    className={`w-full sm:relative h-screen ${
                       retrievalDisabled ? "pb-[111px]" : "pb-[140px]"
                     }
 
@@ -969,7 +971,7 @@ export function ChatPage({
                   >
                     {/* <input {...getInputProps()} /> */}
                     <div
-                      className={`w-full h-full flex    flex-col overflow-y-auto overflow-x-hidden relative`}
+                      className={`w-full h-full flex flex-col overflow-y-auto overflow-x-hidden relative`}
                       ref={scrollableDivRef}
                     >
                       {livePersona && (
@@ -977,9 +979,9 @@ export function ChatPage({
                           className={`sticky top-0 left-0 z-10 w-full bg-background flex ${HEADER_HEIGHT}`}
                         >
                           <div
-                            className={`${SUB_HEADER}   items-end flex w-full`}
+                            className={`${SUB_HEADER} items-end flex w-full`}
                           >
-                            <div className="ml-2 px-1  rounded w-fit">
+                            <div className="ml-2 px-1 rounded w-fit">
                               <ChatPersonaSelector
                                 personas={filteredAssistants}
                                 selectedPersonaId={livePersona.id}
@@ -1321,7 +1323,8 @@ export function ChatPage({
                   {!retrievalDisabled ? (
                     <div
                       ref={sidebarElementRef}
-                      className={`relative flex-none z-[1000] overflow-y-hidden sidebar bg-background-weak  ${SIDEBAR_WIDTH} h-screen  `}
+                      className={`relative flex-none z-[1000] overflow-y-hidden sidebar bg-background-weak ${SIDEBAR_WIDTH} h-screen`}
+                      style={{ width: showDocSidebar ? usedSidebarWidth : 0 }}
                     >
                       <ResizableSection
                         updateSidebarWidth={updateSidebarWidth}

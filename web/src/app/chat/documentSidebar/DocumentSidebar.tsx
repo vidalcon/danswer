@@ -7,15 +7,39 @@ import { SelectedDocumentDisplay } from "./SelectedDocumentDisplay";
 import { removeDuplicateDocs } from "@/lib/documentUtils";
 import { BasicSelectable } from "@/components/BasicClickable";
 import { Message, RetrievalType } from "../interfaces";
-import {
-  HEADER_HEIGHT,
-  HEADER_PADDING,
-  SIDEBAR_WIDTH,
-  SUB_HEADER,
-} from "@/lib/constants";
+import { HEADER_PADDING, SIDEBAR_WIDTH } from "@/lib/constants";
 import { HoverPopup } from "@/components/HoverPopup";
 import { TbLayoutSidebarLeftExpand } from "react-icons/tb";
 import { ForwardedRef, forwardRef } from "react";
+
+function SectionHeader({
+  name,
+  icon,
+  closeHeader,
+}: {
+  name: string;
+  icon: React.FC<{ className: string }>;
+  closeHeader?: () => void;
+}) {
+  return (
+    <div
+      className={`w-full mt-3 flex text-lg text-emphasis font-medium flex  mb-3.5 font-bold flex items-end`}
+    >
+      <div className="flex mt-auto justify-between w-full">
+        <p className="flex">
+          {icon({ className: "my-auto mr-1" })}
+          {name}
+        </p>
+        {closeHeader && (
+          <button onClick={() => closeHeader()}>
+            <TbLayoutSidebarLeftExpand size={24} />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 interface DocumentSidebarProps {
   closeSidebar: () => void;
   selectedMessage: Message | null;
@@ -58,50 +82,21 @@ export const DocumentSidebar = forwardRef<HTMLDivElement, DocumentSidebarProps>(
     // space
     const tokenLimitReached = selectedDocumentTokens > maxTokens - 75;
 
-    function SectionHeader({
-      name,
-      icon,
-      includeToggle,
-    }: {
-      name: string;
-      icon: React.FC<{ className: string }>;
-      includeToggle?: boolean;
-    }) {
-      return (
-        <div
-          className={`w-full flex text-lg  text-emphasis font-medium flex  mb-3.5 font-bold   ${SUB_HEADER}  flex items-end`}
-        >
-          <p className="flex   mt-auto ">
-            {icon({ className: "my-auto  mr-1" })}
-            {name}
-          </p>
-          {includeToggle && (
-            <button
-              onClick={() => closeSidebar()}
-              className="flex  ml-auto content-end "
-            >
-              <TbLayoutSidebarLeftExpand size={24} />
-            </button>
-          )}
-        </div>
-      );
-    }
-
     return (
       <div
         ref={ref}
-        className={`${SIDEBAR_WIDTH} sidebar absolute right-0 h-screen border-l border-l-border `}
+        className={`${SIDEBAR_WIDTH} sidebar absolute right-0 h-screen border-l border-l-border`}
       >
         <div
           className="w-full flex-initial 
-      overflow-y-hidden
-      flex
-      flex-col h-screen"
+          overflow-y-hidden
+          flex
+          flex-col h-screen"
         >
           {popup}
 
           <div className="h-4/6 flex flex-col ">
-            <div className="px-3   mb-3 flex border-b border-border">
+            <div className="px-3 mb-3 flex border-b border-border">
               <SectionHeader
                 name={
                   selectedMessageRetrievalType === RetrievalType.SelectedDocs
@@ -109,7 +104,7 @@ export const DocumentSidebar = forwardRef<HTMLDivElement, DocumentSidebarProps>(
                     : "Retrieved Documents"
                 }
                 icon={FiFileText}
-                includeToggle
+                closeHeader={closeSidebar}
               />
             </div>
 

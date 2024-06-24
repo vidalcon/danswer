@@ -1,8 +1,5 @@
 export type AuthType = "disabled" | "basic" | "google_oauth" | "oidc" | "saml";
 
-export const HEADER_HEIGHT = "h-16";
-export const SUB_HEADER = "h-12";
-
 export const INTERNAL_URL = process.env.INTERNAL_URL || "http://127.0.0.1:8080";
 export const NEXT_PUBLIC_DISABLE_STREAMING =
   process.env.NEXT_PUBLIC_DISABLE_STREAMING?.toLowerCase() === "true";
@@ -29,7 +26,7 @@ export const LOGOUT_DISABLED =
 // NOTE: since this is a `NEXT_PUBLIC_` variable, it will be set at
 // build-time
 // TODO: consider moving this to an API call so that the api_server
-// can be the single source of truths
+// can be the single source of truth
 export const EE_ENABLED =
   process.env.NEXT_PUBLIC_ENABLE_PAID_EE_FEATURES?.toLowerCase() === "true";
 

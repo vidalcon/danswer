@@ -85,7 +85,6 @@ export function ChatInputBar({
               flex-col
               border
               border-border-medium
-
               rounded-lg
               overflow-hidden
               bg-background-weak
@@ -120,7 +119,6 @@ export function ChatInputBar({
                 shrink
                 resize-none
                 border-0
-             
                 bg-background-weak
                 ${
                   textAreaRef.current &&
@@ -128,7 +126,6 @@ export function ChatInputBar({
                     ? "overflow-y-auto mt-2"
                     : ""
                 }
-                
                 overflow-hidden
                 whitespace-normal
                 break-word
@@ -168,6 +165,7 @@ export function ChatInputBar({
                 icon={FaBrain}
                 onClick={() => setConfigModalActiveTab("assistants")}
               />
+
               <ChatInputOption
                 name={
                   llmOverrideManager.llmOverride.modelName ||

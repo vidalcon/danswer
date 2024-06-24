@@ -27,7 +27,6 @@ export function SettingsProvider({
   const contextValue: CombinedSettings = {
     ...settings,
     isMobile,
-    setIsMobile,
   };
 
   return (

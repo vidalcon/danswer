@@ -34,6 +34,7 @@ import {
   removeMessage,
   sendMessage,
   setMessageAsLatest,
+  updateModelOverrideForChatSession,
   updateParentChildren,
   uploadFilesForChat,
 } from "./lib";
@@ -58,7 +59,12 @@ import { AnswerPiecePacket, DanswerDocument } from "@/lib/search/interfaces";
 import { buildFilters } from "@/lib/search/utils";
 import { SettingsContext } from "@/components/settings/SettingsProvider";
 import Dropzone from "react-dropzone";
-import { checkLLMSupportsImageInput, getFinalLLM } from "@/lib/llm/utils";
+import {
+  checkLLMSupportsImageInput,
+  destructureValue,
+  getFinalLLM,
+  structureValue,
+} from "@/lib/llm/utils";
 import { ChatInputBar } from "./input/ChatInputBar";
 import { ConfigurationModal } from "./modal/configuration/ConfigurationModal";
 import { useChatContext } from "@/components/context/ChatContext";
@@ -68,14 +74,8 @@ import { orderAssistantsForUser } from "@/lib/assistants/orderAssistants";
 
 import { TbLayoutSidebarRightExpand } from "react-icons/tb";
 
-import {
-  HEADER_HEIGHT,
-  SIDEBAR_WIDTH,
-  SIDEBAR_WIDTH_CONST,
-  SUB_HEADER,
-} from "@/lib/constants";
+import { SIDEBAR_WIDTH_CONST } from "@/lib/constants";
 import ResizableSection from "@/components/resizable/ResizableSection";
-import { BasicSelectable } from "@/components/BasicClickable";
 
 const MAX_INPUT_HEIGHT = 200;
 const TEMP_USER_MESSAGE_ID = -1;
@@ -102,6 +102,7 @@ export function ChatPage({
     folders,
     openedFolders,
   } = useChatContext();
+
   const filteredAssistants = orderAssistantsForUser(availablePersonas, user);
 
   const router = useRouter();
@@ -114,6 +115,9 @@ export function ChatPage({
   const selectedChatSession = chatSessions.find(
     (chatSession) => chatSession.id === existingChatSessionId
   );
+
+  const llmOverrideManager = useLlmOverride(selectedChatSession);
+
   const existingChatSessionPersonaId = selectedChatSession?.persona_id;
 
   // used to track whether or not the initial "submit on load" has been performed
@@ -134,25 +138,37 @@ export function ChatPage({
   // this is triggered every time the user switches which chat
   // session they are using
   useEffect(() => {
+    if (
+      chatSessionId &&
+      !urlChatSessionId.current &&
+      llmOverrideManager.llmOverride
+    ) {
+      updateModelOverrideForChatSession(
+        chatSessionId,
+        structureValue(
+          llmOverrideManager.llmOverride.name,
+          llmOverrideManager.llmOverride.provider,
+          llmOverrideManager.llmOverride.modelName
+        ) as string
+      );
+    }
     urlChatSessionId.current = existingChatSessionId;
-
     textAreaRef.current?.focus();
 
     // only clear things if we're going from one chat session to another
+
     if (chatSessionId !== null && existingChatSessionId !== chatSessionId) {
       // de-select documents
       clearSelectedDocuments();
       // reset all filters
+
       filterManager.setSelectedDocumentSets([]);
       filterManager.setSelectedSources([]);
       filterManager.setSelectedTags([]);
       filterManager.setTimeRange(null);
-      // reset LLM overrides
-      llmOverrideManager.setLlmOverride({
-        name: "",
-        provider: "",
-        modelName: "",
-      });
+
+      // reset LLM overrides (based on chat session!)
+      llmOverrideManager.updateModelOverrideForChatSession(selectedChatSession);
       llmOverrideManager.setTemperature(null);
       // remove uploaded files
       setCurrentMessageFiles([]);
@@ -187,7 +203,6 @@ export function ChatPage({
           submitOnLoadPerformed.current = true;
           await onSubmit();
         }
-
         return;
       }
 
@@ -196,6 +211,7 @@ export function ChatPage({
         `/api/chat/get-chat-session/${existingChatSessionId}`
       );
       const chatSession = (await response.json()) as BackendChatSession;
+
       setSelectedPersona(
         filteredAssistants.find(
           (persona) => persona.id === chatSession.persona_id
@@ -241,6 +257,19 @@ export function ChatPage({
 
     initialSessionFetch();
   }, [existingChatSessionId]);
+
+  const [usedSidebarWidth, setUsedSidebarWidth] = useState<number>(
+    parseInt(SIDEBAR_WIDTH_CONST)
+  );
+
+  const updateSidebarWidth = (newWidth: number) => {
+    setUsedSidebarWidth(newWidth);
+    if (sidebarElementRef.current && innerSidebarElementRef.current) {
+      sidebarElementRef.current.style.transition = "";
+      sidebarElementRef.current.style.width = `${newWidth}px`;
+      innerSidebarElementRef.current.style.width = `${newWidth}px`;
+    }
+  };
 
   const [chatSessionId, setChatSessionId] = useState<number | null>(
     existingChatSessionId
@@ -395,8 +424,6 @@ export function ChatPage({
       availableSources,
       availableDocumentSets,
     });
-
-  const llmOverrideManager = useLlmOverride();
 
   // state for cancelling streaming
   const [isCancelled, setIsCancelled] = useState(false);
@@ -606,6 +633,7 @@ export function ChatPage({
           .map((document) => document.db_doc_id as number),
         queryOverride,
         forceSearch,
+
         modelProvider: llmOverrideManager.llmOverride.name || undefined,
         modelVersion:
           llmOverrideManager.llmOverride.modelName ||
@@ -853,10 +881,6 @@ export function ChatPage({
     router.push("/search");
   }
 
-  const retrievalDisabled = !personaIncludesRetrieval(livePersona);
-  const sidebarElementRef = useRef<HTMLDivElement>(null);
-  const innerSidebarElementRef = useRef<HTMLDivElement>(null);
-
   const [showDocSidebar, setShowDocSidebar] = useState(true); // State to track if sidebar is open
 
   const toggleSidebar = () => {
@@ -870,30 +894,15 @@ export function ChatPage({
 
     setShowDocSidebar((showDocSidebar) => !showDocSidebar); // Toggle the state which will in turn toggle the class
   };
-
   const [isChatSidebarOpen, setIsChatSidebarOpen] = useState(false);
 
   const toggleChatSideBar = () => {
     setIsChatSidebarOpen(!isChatSidebarOpen);
   };
 
-  const [usedSidebarWidth, setUsedSidebarWidth] = useState<number>(
-    parseInt(SIDEBAR_WIDTH_CONST)
-  );
-
-  const updateSidebarWidth = (newWidth: number) => {
-    setUsedSidebarWidth(newWidth);
-    if (
-      sidebarElementRef &&
-      sidebarElementRef.current &&
-      innerSidebarElementRef &&
-      innerSidebarElementRef.current
-    ) {
-      sidebarElementRef.current.style.transition = "";
-      sidebarElementRef.current.style.width = `${newWidth}px`;
-      innerSidebarElementRef.current.style.width = `${newWidth}px`;
-    }
-  };
+  const retrievalDisabled = !personaIncludesRetrieval(livePersona);
+  const sidebarElementRef = useRef<HTMLDivElement>(null);
+  const innerSidebarElementRef = useRef<HTMLDivElement>(null);
 
   return (
     <>
@@ -901,14 +910,16 @@ export function ChatPage({
       <InstantSSRAutoRefresh />
 
       <div className="flex relative bg-background text-default overflow-x-hidden">
-        <ChatSidebar
-          isChatSidebarOpen={isChatSidebarOpen}
-          toggleChatSideBar={toggleChatSideBar}
-          existingChats={chatSessions}
-          currentChatSession={selectedChatSession}
-          folders={folders}
-          openedFolders={openedFolders}
-        />
+        <div className="bg-background-weak">
+          <ChatSidebar
+            isChatSidebarOpen={isChatSidebarOpen}
+            toggleChatSideBar={toggleChatSideBar}
+            existingChats={chatSessions}
+            currentChatSession={selectedChatSession}
+            folders={folders}
+            openedFolders={openedFolders}
+          />
+        </div>
 
         <div ref={masterFlexboxRef} className="flex w-full overflow-x-hidden">
           {popup}
@@ -944,6 +955,7 @@ export function ChatPage({
           )}
 
           <ConfigurationModal
+            chatSessionId={chatSessionId!}
             activeTab={configModalActiveTab}
             setActiveTab={setConfigModalActiveTab}
             onClose={() => setConfigModalActiveTab(null)}
@@ -963,7 +975,6 @@ export function ChatPage({
                     className={`w-full sm:relative h-screen ${
                       retrievalDisabled ? "pb-[111px]" : "pb-[140px]"
                     }
-
                       flex-auto transition-margin duration-300 
                       overflow-x-auto
                       `}
@@ -975,13 +986,9 @@ export function ChatPage({
                       ref={scrollableDivRef}
                     >
                       {livePersona && (
-                        <div
-                          className={`sticky top-0 left-0 z-10 w-full bg-background flex ${HEADER_HEIGHT}`}
-                        >
-                          <div
-                            className={`${SUB_HEADER} items-end flex w-full`}
-                          >
-                            <div className="ml-2 px-1 rounded w-fit">
+                        <div className="sticky top-0 left-80 z-10 w-full bg-background flex">
+                          <div className="mt-2 flex w-full">
+                            <div className="ml-2 p-1 rounded w-fit">
                               <ChatPersonaSelector
                                 personas={filteredAssistants}
                                 selectedPersonaId={livePersona.id}
@@ -995,23 +1002,23 @@ export function ChatPage({
                                 className={`
                                     rounded
                                     cursor-pointer
-                                    px-2 
-                                    py-1
+                                    my-auto
                                     hover:bg-hover-light
                                   `}
                               >
                                 <FiMenu size={24} />
                               </div>
                             )}
-                            <div className="ml-auto mr-3 mt-auto flex items-end">
+
+                            <div className="ml-auto mr-3 flex">
                               {chatSessionId !== null && (
                                 <div
                                   onClick={() => setSharingModalVisible(true)}
                                   className={`
+                                    my-auto
+                                    p-2
                                     rounded
                                     cursor-pointer
-                                    px-2 
-                                    py-1
                                     hover:bg-hover-light
                                   `}
                                 >
@@ -1019,9 +1026,8 @@ export function ChatPage({
                                 </div>
                               )}
 
-                              <div className=" flex  ml-4">
+                              <div className="ml-4 flex my-auto">
                                 <UserDropdown user={user} />
-
                                 {!retrievalDisabled && !showDocSidebar && (
                                   <button
                                     className="ml-4 mt-auto"
@@ -1048,10 +1054,7 @@ export function ChatPage({
 
                       <div
                         className={
-                          `mt-4 pt-12 sm:pt-0
-                          w-searchbar-xs 
-                            2xl:w-searchbar-sm  
-                            3xl:w-searchbar mx-auto` +
+                          "mt-4 pt-12 sm:pt-0 mx-8" +
                           (hasPerformedInitialScroll ? "" : " invisible")
                         }
                       >
@@ -1267,7 +1270,9 @@ export function ChatPage({
                               className={`
                             mx-auto 
                             px-4 
-                             
+                            w-searchbar-xs 
+                            2xl:w-searchbar-sm 
+                            3xl:w-searchbar 
                             grid 
                             gap-4 
                             grid-cols-1 
@@ -1293,7 +1298,6 @@ export function ChatPage({
                               )}
                             </div>
                           )}
-
                         <div ref={endDivRef} />
                       </div>
                     </div>
@@ -1323,7 +1327,7 @@ export function ChatPage({
                   {!retrievalDisabled ? (
                     <div
                       ref={sidebarElementRef}
-                      className={`relative flex-none z-[1000] overflow-y-hidden sidebar bg-background-weak ${SIDEBAR_WIDTH} h-screen`}
+                      className={`relative flex-none z-[1000] overflow-y-hidden sidebar bg-background-weak h-screen`}
                       style={{ width: showDocSidebar ? usedSidebarWidth : 0 }}
                     >
                       <ResizableSection
@@ -1348,7 +1352,6 @@ export function ChatPage({
                   ) : // Another option is to use a div with the width set to the initial width, so that the
                   // chat section appears in the same place as before
                   // <div style={documentSidebarInitialWidth ? {width: documentSidebarInitialWidth} : {}}></div>
-                  // chat section appears in the same place as before
                   null}
                 </>
               )}

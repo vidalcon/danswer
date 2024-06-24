@@ -1,3 +1,4 @@
+// "use client"
 import { Header } from "@/components/header/Header";
 import { AdminSidebar } from "@/components/admin/connectors/AdminSidebar";
 import {
@@ -17,6 +18,7 @@ import {
 } from "@/lib/userSS";
 import { redirect } from "next/navigation";
 import { FiCpu, FiPackage, FiSettings, FiSlack, FiTool } from "react-icons/fi";
+import { useState } from "react";
 
 export async function Layout({ children }: { children: React.ReactNode }) {
   const tasks = [getAuthTypeMetadataSS(), getCurrentUserSS()];
@@ -47,6 +49,11 @@ export async function Layout({ children }: { children: React.ReactNode }) {
       return redirect("/auth/waiting-on-verification");
     }
   }
+  // const [isOpenAdminSidebar, setIsOpenAdminSidebar] = useState(true)
+
+  // const toggleAdminSidebar = () => {
+  //   setIsOpenAdminSidebar(isOpenAdminSidebar => !isOpenAdminSidebar)
+  // }
 
   return (
     <div className="h-screen overflow-y-hidden">
@@ -54,8 +61,12 @@ export async function Layout({ children }: { children: React.ReactNode }) {
         <Header user={user} />
       </div>
       <div className="flex h-full pt-16">
-        <div className="w-80  bg-background-weak pt-12 pb-8 h-full border-r border-border">
+        <div className="w-80 bg-background-weak pt-12 pb-8 h-full border-r border-border">
           <AdminSidebar
+            isOpen={false}
+            toggleAdminSidebar={() => null}
+            // isOpen={isOpenAdminSidebar}
+            // toggleAdminSidebar={toggleAdminSidebar}
             collections={[
               {
                 name: "Connectors",

@@ -664,7 +664,7 @@ export function AssistantEditor({
                           .
                         </Text>
 
-                        <div className="flex mt-6">
+                        <div className="flex flex-wrap mt-6">
                           <div className="w-96">
                             <SubLabel>LLM Provider</SubLabel>
                             <SelectorFormField
@@ -693,7 +693,7 @@ export function AssistantEditor({
                           </div>
 
                           {values.llm_model_provider_override && (
-                            <div className="w-96 ml-4">
+                            <div className="min-w-40 w-96 ml-4">
                               <SubLabel>Model</SubLabel>
                               <SelectorFormField
                                 name="llm_model_version_override"

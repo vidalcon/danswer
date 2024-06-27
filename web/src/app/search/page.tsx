@@ -148,7 +148,7 @@ export default async function Home() {
     !shouldShowWelcomeModal;
 
   const secondsUntilExpiration = getSecondsUntilExpiration(user);
-  console.log(secondsUntilExpiration)
+
   return (
     <>
       <Header user={user} />

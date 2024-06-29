@@ -107,6 +107,11 @@ function Main() {
   const onConfirm = async (
     model: CloudEmbeddingModel | EmbeddingModelDescriptor
   ) => {
+    if (!model.model_name) {
+      model.model_name = model?.name;
+      model.cloud_provider_id = 0;
+    }
+    // model.model_name = model.name
     const response = await fetch(
       "/api/secondary-index/set-new-embedding-model",
       {
@@ -334,19 +339,21 @@ function Main() {
             monitor the progress of the re-indexing on this page.
           </Text>
 
-          <div className="mt-8 w-full mb-12 divide-x-2 divide-solid divide-black grid grid-cols-2 gap-x-2">
+          <div className="mt-8 text-sm  mr-auto  mb-12 divide-x-2  flex   ">
             <button
               onClick={() => setOpenToggle(true)}
-              className={`py-4 font-bold ${openToggle ? " underline" : "hover:underline"}`}
+              className={` mx-2 p-2 font-bold  ${openToggle ? "rounded bg-neutral-900 text-neutral-100 underline" : "hover:underline"}`}
             >
               Open source
             </button>
-            <button
-              onClick={() => setOpenToggle(false)}
-              className={`font-bold ${!openToggle ? " underline" : "hover:underline"}`}
-            >
-              Hosted
-            </button>
+            <div className="px-2 ">
+              <button
+                onClick={() => setOpenToggle(false)}
+                className={`mx-2 p-2 font-bold  ${!openToggle ? "rounded bg-neutral-900   text-neutral-100 underline" : " hover:underline"}`}
+              >
+                Hosted
+              </button>
+            </div>
           </div>
         </>
       )}

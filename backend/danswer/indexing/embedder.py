@@ -50,6 +50,7 @@ class DefaultIndexingEmbedder(IndexingEmbedder):
         normalize: bool,
         query_prefix: str | None,
         passage_prefix: str | None,
+        api_key,
     ):
         super().__init__(model_name, normalize, query_prefix, passage_prefix)
         self.max_seq_length = DOC_EMBEDDING_CONTEXT_SIZE  # Currently not customizable

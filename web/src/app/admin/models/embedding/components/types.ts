@@ -13,6 +13,7 @@ export interface CloudEmbeddingModel {
   description: string;
   model_dim: number;
   normalize: boolean;
+  cloud_provider_id?: number;
   link: string;
   query_prefix: string;
   passage_prefix: string;

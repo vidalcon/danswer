@@ -32,6 +32,8 @@ import { ProviderCreation, ProviderCreationModal2 } from "./ProviderCreation";
 function Main() {
   const [openToggle, setOpenToggle] = useState(true);
   const [tenativelyNewProvider, setTenativelyNewProvider] = useState<CloudEmbeddingProvider | null>(null);
+  const [newEnabledProviders, setNewEnabledProvides] = useState<string[]>([])
+
   const [showModelNotConfiguredModal, setShowModelNotConfiguredModal] = useState<CloudEmbeddingProvider | null>(null);
   const [showSelectModelModal, setShowSelectModelModal] = useState(false);
   const [showChangeModelModal, setShowChangeModelModal] = useState(false);
@@ -251,6 +253,7 @@ function Main() {
           onConfirm={() => {
             setTenativelyNewProvider(showModelNotConfiguredModal);
             setShowModelNotConfiguredModal(null)
+            setNewEnabledProvides(newEnabledProviders => [...newEnabledProviders, tenativelyNewProvider.name])
           }
           }
           onCancel={() => setTenativelyNewProvider(null)}
@@ -336,6 +339,7 @@ function Main() {
           <OpenSourceEmbeddingSelectionPage onSelectOpenSource={onSelectOpenSource} currentModelName={currentModelName} />
         ) : (
           <CloudEmbeddingPage
+            newEnabledProviders={newEnabledProviders}
             setTentativeNewEmbeddingModel={setTentativeNewCloudEmbeddingModel}
             setTenativelyNewProvider={setTenativelyNewProvider}
             selectedModel={selectedModel}

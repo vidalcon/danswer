@@ -31,7 +31,8 @@ import { ChangeCredentialsModal, ChangeModelModal, DeleteCredentialsModal, Model
 import OpenSourceEmbeddingSelectionPage from "./OpenSourceEmbeddingSelectionPage";
 
 
-export default function CloudEmbeddingPage({ setTentativeNewEmbeddingModel, setTenativelyNewProvider, selectedModel, setShowModelNotConfiguredModal, setChangeCredentials }: {
+export default function CloudEmbeddingPage({ newEnabledProviders, setTentativeNewEmbeddingModel, setTenativelyNewProvider, selectedModel, setShowModelNotConfiguredModal, setChangeCredentials }: {
+    newEnabledProviders: string[],
     setTentativeNewEmbeddingModel: React.Dispatch<React.SetStateAction<CloudEmbeddingModel | null>>,
     setTenativelyNewProvider: React.Dispatch<React.SetStateAction<CloudEmbeddingProvider | null>>,
     selectedModel: CloudEmbeddingProvider,
@@ -41,8 +42,7 @@ export default function CloudEmbeddingPage({ setTentativeNewEmbeddingModel, setT
 
     let providers: CloudEmbeddingProviderFull[] = []
     AVAILABLE_CLOUD_MODELS.forEach((model, ind) => {
-        let temporary_model: CloudEmbeddingProviderFull = { ...model, "configured": ind == 3 }
-
+        let temporary_model: CloudEmbeddingProviderFull = { ...model, "configured": newEnabledProviders.includes(model.name) }
         providers.push(temporary_model)
 
     })

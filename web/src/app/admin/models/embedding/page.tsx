@@ -15,8 +15,11 @@ import {
   CloudEmbeddingProvider,
   CloudEmbeddingModel,
   AVAILABLE_CLOUD_MODELS,
+  AVAILABLE_MODELS,
   INVALID_OLD_MODEL,
-  checkModelNameIsValid
+  checkModelNameIsValid,
+  fillOutEmeddingModelDescriptor,
+  EmbeddingModelDescriptor
 } from "./embeddingModels";
 import { ErrorCallout } from "@/components/ErrorCallout";
 import { Connector, ConnectorIndexingStatus } from "@/lib/types";
@@ -38,40 +41,76 @@ function Main() {
   const [isCancelling, setIsCancelling] = useState<boolean>(false);
   const [showAddConnectorPopup, setShowAddConnectorPopup] = useState<boolean>(false);
 
+
   const {
     data: currentEmeddingModel,
     isLoading: isLoadingCurrentModel,
     error: currentEmeddingModelError,
-  } = useSWR<CloudEmbeddingModel>(
+  } = useSWR<EmbeddingModelDescriptor>(
     "/api/secondary-index/get-current-embedding-model",
     errorHandlingFetcher,
-    { refreshInterval: 5000 }
+    { refreshInterval: 5000 } // 5 seconds
   );
+
 
   const {
     data: futureEmbeddingModel,
     isLoading: isLoadingFutureModel,
     error: futureEmeddingModelError,
-  } = useSWR<CloudEmbeddingModel | null>(
+  } = useSWR<EmbeddingModelDescriptor | null>(
     "/api/secondary-index/get-secondary-embedding-model",
     errorHandlingFetcher,
-    { refreshInterval: 5000 }
+    { refreshInterval: 5000 } // 5 seconds
   );
-
   const {
     data: ongoingReIndexingStatus,
     isLoading: isLoadingOngoingReIndexingStatus,
   } = useSWR<ConnectorIndexingStatus<any, any>[]>(
     "/api/manage/admin/connector/indexing-status?secondary_index=true",
     errorHandlingFetcher,
-    { refreshInterval: 5000 }
+    { refreshInterval: 5000 } // 5 seconds
   );
-
   const { data: connectors } = useSWR<Connector<any>[]>(
     "/api/manage/connector",
     errorHandlingFetcher,
-    { refreshInterval: 5000 }
+    { refreshInterval: 5000 } // 5 seconds
   );
+
+  // const {
+  //   data: currentEmeddingModel,
+  //   isLoading: isLoadingCurrentModel,
+  //   error: currentEmeddingModelError,
+  // } = useSWR<CloudEmbeddingModel>(
+  //   "/api/secondary-index/get-current-embedding-model",
+  //   errorHandlingFetcher,
+  //   { refreshInterval: 5000 }
+  // );
+
+  // const {
+  //   data: futureEmbeddingModel,
+  //   isLoading: isLoadingFutureModel,
+  //   error: futureEmeddingModelError,
+  // } = useSWR<CloudEmbeddingModel | null>(
+  //   "/api/secondary-index/get-secondary-embedding-model",
+  //   errorHandlingFetcher,
+  //   { refreshInterval: 5000 }
+  // );
+
+  // const {
+  //   data: ongoingReIndexingStatus,
+  //   isLoading: isLoadingOngoingReIndexingStatus,
+  // } = useSWR<ConnectorIndexingStatus<any, any>[]>(
+  //   "/api/manage/admin/connector/indexing-status?secondary_index=true",
+  //   errorHandlingFetcher,
+  //   { refreshInterval: 5000 }
+  // );
+
+  // const { data: connectors } = useSWR<Connector<any>[]>(
+  //   "/api/manage/connector",
+  //   errorHandlingFetcher,
+  //   { refreshInterval: 5000 }
+  // );
+
 
   const onSelect = async (model: CloudEmbeddingModel) => {
     if (currentEmeddingModel?.name === INVALID_OLD_MODEL) {
@@ -130,8 +169,54 @@ function Main() {
     return <ErrorCallout errorTitle="Failed to fetch embedding model status" />;
   }
 
-  const currentModelName = currentEmeddingModel.name;
-  const currentModel = AVAILABLE_CLOUD_MODELS[0].models[0];
+
+  const onConfirmSelection = async (model: EmbeddingModelDescriptor) => {
+    const response = await fetch(
+      "/api/secondary-index/set-new-embedding-model",
+      {
+        method: "POST",
+        body: JSON.stringify(model),
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+    if (response.ok) {
+      setTentativeNewEmbeddingModel(null);
+      mutate("/api/secondary-index/get-secondary-embedding-model");
+      if (!connectors || !connectors.length) {
+        setShowAddConnectorPopup(true);
+      }
+    } else {
+      alert(`Failed to update embedding model - ${await response.text()}`);
+    }
+  };
+
+
+  const currentModelName = currentEmeddingModel?.model_name;
+  const currentModel =
+    AVAILABLE_MODELS.find((model) => model.model_name === currentModelName) ||
+    fillOutEmeddingModelDescriptor(currentEmeddingModel);
+
+  const newModelSelection = futureEmbeddingModel
+    ? AVAILABLE_MODELS.find(
+      (model) => model.model_name === futureEmbeddingModel.model_name
+    ) || fillOutEmeddingModelDescriptor(futureEmbeddingModel)
+    : null;
+
+
+  const onSelectOpenSource = async (model: EmbeddingModelDescriptor) => {
+    if (currentEmeddingModel?.model_name === INVALID_OLD_MODEL) {
+      await onConfirmSelection(model);
+    } else {
+      setTentativeNewEmbeddingModel(model);
+    }
+  };
+
+
+
+  // const currentModelName = currentEmeddingModel.name;
+  // const currentModel = AVAILABLE_CLOUD_MODELS[0].models[0];
   const selectedModel = AVAILABLE_CLOUD_MODELS[0];
 
   const handleChangeCredentials = async (apiKey: string) => {
@@ -232,12 +317,19 @@ function Main() {
       {!showAddConnectorPopup && !futureEmbeddingModel && (
         openToggle ? (
           <div>
-            <ModelSelector
+            {/* <ModelSelector
               modelOptions={AVAILABLE_CLOUD_MODELS.flatMap(provider => provider.models).filter(
                 (modelOption) => modelOption.name !== currentModelName
               )}
               setSelectedModel={onSelect}
+            /> */}
+            <ModelSelector
+              modelOptions={AVAILABLE_MODELS.filter(
+                (modelOption) => modelOption.model_name !== currentModelName
+              )}
+              setSelectedModel={onSelectOpenSource}
             />
+
 
             <Title className="mt-8">Alternatively, here are some cloud-based models to choose from!</Title>
             <Text className="mb-4">
@@ -300,13 +392,12 @@ function Main() {
                     {provider.models.map((model, index) => (
                       <div
                         key={index}
-                        className={`p-3 mb-2 border-2 border-neutral-300 border-opacity-40 rounded-md rounded cursor-pointer ${
-                          provider.configured 
-                            ? selectedModel.name === model.name 
-                              ? 'bg-teal-50 border border-blue-300' 
-                              : 'hover:bg-blue-50' 
-                            : 'hover:bg-rose-50'
-                        }`}
+                        className={`p-3 mb-2 border-2 border-neutral-300 border-opacity-40 rounded-md rounded cursor-pointer ${provider.configured
+                          ? selectedModel.name === model.name
+                            ? 'bg-teal-50 border border-blue-300'
+                            : 'hover:bg-blue-50'
+                          : 'hover:bg-rose-50'
+                          }`}
                         onClick={() => {
                           if (model.name === "") {
                             return;
@@ -329,7 +420,7 @@ function Main() {
                   </div>
 
                   <div className="text-sm flex justify-between mt-1 mx-2">
-                    <button 
+                    <button
                       onClick={() => {
                         if (provider.configured) {
                           setChangeCredentials(provider);
@@ -378,8 +469,8 @@ function Main() {
               <div>
                 <div>
                   <b className="text-base">Embedding model successfully selected</b>{" "}
-                  
-                  
+
+
 
                   🙌
                   <br />
@@ -483,7 +574,7 @@ function Page() {
 }
 
 export default Page;
-                  {/* // "use client";
+{/* // "use client";
 
 // import { ThreeDotsLoader } from "@/components/Loading";
 // import { AdminPageTitle } from "@/components/admin/Title";

@@ -38,7 +38,7 @@ export interface EmbeddingDetails {
   api_key: string,
   custom_config: any,
   default_model_id?: number,
-  nmae: string
+  name: string
 }
 
 

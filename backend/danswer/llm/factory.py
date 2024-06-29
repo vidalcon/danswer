@@ -1,3 +1,8 @@
+from enum import Enum
+
+import openai
+import voyageai
+from cohere import Client as CohereClient
 from danswer.configs.app_configs import DISABLE_GENERATIVE_AI
 from danswer.configs.chat_configs import QA_TIMEOUT
 from danswer.configs.model_configs import GEN_AI_TEMPERATURE
@@ -12,10 +17,6 @@ from danswer.llm.interfaces import LLM
 from danswer.llm.override_models import LLMOverride
 from danswer.utils.logger import setup_logger
 from danswer.utils.threadpool_concurrency import run_functions_tuples_in_parallel
-import voyageai
-from enum import Enum
-import openai
-from cohere import Client as CohereClient
 
 logger = setup_logger()
 

@@ -68,7 +68,6 @@ export function ProviderCreation({
                 return;
             }
 
-
             const response = await fetch(EMBEDDING_PROVIDERS_ADMIN_URL, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
@@ -107,7 +106,7 @@ export function ProviderCreation({
             {({ values, errors, touched, isSubmitting, handleSubmit }) => (
                 <Form onSubmit={handleSubmit} className="space-y-4">
                     <Text className="text-lg mb-2">
-                        You are setting the credentials for this provider. To access this information, follow the instructions <a className="cursor-pointer underline" target="_blank" href={selectedProvider.apiLink}>here</a> and gather your "API KEY".
+                        You are setting the credentials for this provider. To access this information, follow the instructions <a className="cursor-pointer underline" target="_blank" href={selectedProvider.apiLink}>here</a> and gather your &quot;API KEY&quot;.
                     </Text>
 
                     <p>

@@ -8,31 +8,6 @@ from typing import Optional
 from typing import TypedDict
 from uuid import UUID
 
-from fastapi_users_db_sqlalchemy import SQLAlchemyBaseOAuthAccountTableUUID
-from fastapi_users_db_sqlalchemy import SQLAlchemyBaseUserTableUUID
-from fastapi_users_db_sqlalchemy.access_token import SQLAlchemyBaseAccessTokenTableUUID
-from sqlalchemy import Boolean
-from sqlalchemy import DateTime
-from sqlalchemy import Enum
-from sqlalchemy import Float
-from sqlalchemy import ForeignKey
-from sqlalchemy import func
-from sqlalchemy import Index
-from sqlalchemy import Integer
-from sqlalchemy import Sequence
-from sqlalchemy import String
-from sqlalchemy import Text
-from sqlalchemy import UniqueConstraint
-from sqlalchemy.dialects import postgresql
-from sqlalchemy.engine.interfaces import Dialect
-from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy.orm import Mapped
-from sqlalchemy.orm import mapped_column
-from sqlalchemy.orm import relationship
-from sqlalchemy.types import LargeBinary
-from sqlalchemy.types import TypeDecorator
-from sqlalchemy import Integer, String, Boolean, JSON
-
 from danswer.auth.schemas import UserRole
 from danswer.configs.constants import DEFAULT_BOOST
 from danswer.configs.constants import DocumentSource
@@ -54,6 +29,30 @@ from danswer.search.enums import RecencyBiasSetting
 from danswer.search.enums import SearchType
 from danswer.utils.encryption import decrypt_bytes_to_string
 from danswer.utils.encryption import encrypt_string_to_bytes
+from fastapi_users_db_sqlalchemy import SQLAlchemyBaseOAuthAccountTableUUID
+from fastapi_users_db_sqlalchemy import SQLAlchemyBaseUserTableUUID
+from fastapi_users_db_sqlalchemy.access_token import SQLAlchemyBaseAccessTokenTableUUID
+from sqlalchemy import Boolean
+from sqlalchemy import DateTime
+from sqlalchemy import Enum
+from sqlalchemy import Float
+from sqlalchemy import ForeignKey
+from sqlalchemy import func
+from sqlalchemy import Index
+from sqlalchemy import Integer
+from sqlalchemy import JSON
+from sqlalchemy import Sequence
+from sqlalchemy import String
+from sqlalchemy import Text
+from sqlalchemy import UniqueConstraint
+from sqlalchemy.dialects import postgresql
+from sqlalchemy.engine.interfaces import Dialect
+from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import Mapped
+from sqlalchemy.orm import mapped_column
+from sqlalchemy.orm import relationship
+from sqlalchemy.types import LargeBinary
+from sqlalchemy.types import TypeDecorator
 
 
 class Base(DeclarativeBase):

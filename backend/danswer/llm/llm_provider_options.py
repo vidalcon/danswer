@@ -134,4 +134,3 @@ def fetch_available_well_known_llms() -> list[WellKnownLLMProviderDescriptor]:
 
 def fetch_models_for_provider(provider_name: str) -> list[str]:
     return _PROVIDER_TO_MODELS_MAP.get(provider_name, [])
-

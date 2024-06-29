@@ -24,12 +24,14 @@ export default function CloudEmbeddingPage({ embeddingProviderDetails, newEnable
 }) {
 
     function hasNameInArray(arr: Array<{ name: string }>, searchName: string): boolean {
+
+
         return arr.some(item => item.name.toLowerCase() === searchName.toLowerCase());
     }
 
     let providers: CloudEmbeddingProviderFull[] = []
     AVAILABLE_CLOUD_MODELS.forEach((model, ind) => {
-        let temporary_model: CloudEmbeddingProviderFull = { ...model, "configured": newEnabledProviders.includes(model.name) || hasNameInArray(AVAILABLE_CLOUD_MODELS, model.name) }
+        let temporary_model: CloudEmbeddingProviderFull = { ...model, "configured": newEnabledProviders.includes(model.name) || (embeddingProviderDetails && hasNameInArray(embeddingProviderDetails, model.name))! }
         providers.push(temporary_model)
 
     })
@@ -96,7 +98,7 @@ export default function CloudEmbeddingPage({ embeddingProviderDetails, newEnable
                             }}
                             className="hover:underline cursor-pointer"
                         >
-                            {provider.configured ? "Change credentials" : 'Configure credentials'}
+                            {provider.configured ? "Modify credentials" : 'Configure credentials'}
                         </button>
                         <a className="hover:underline cursor-pointer">
                             Learn more

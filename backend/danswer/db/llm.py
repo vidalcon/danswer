@@ -31,7 +31,7 @@ def upsert_cloud_embedding_provider(db_session: Session, provider: CloudEmbeddin
 
     return FullCloudEmbeddingProvider.from_orm(existing_provider)
 
-
+ 
 def upsert_llm_provider(
     db_session: Session, llm_provider: LLMProviderUpsertRequest
 ) -> FullLLMProvider:

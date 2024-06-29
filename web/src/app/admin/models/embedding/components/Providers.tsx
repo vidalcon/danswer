@@ -44,11 +44,11 @@ export function SelectModelModal({
   onCancel: () => void;
 }) {
   return (
-    <Modal title={`Elevate Your Game with ${model.model_name}`} onOutsideClick={onCancel}>
+    <Modal title={`Elevate Your Game with ${model.name}`} onOutsideClick={onCancel}>
       <div className="mb-4">
         <Text className="text-lg mb-2">
-          You&apos;re about to supercharge your setup with {model.model_name} from
-          {/* {model.provider_id}. */}
+          You&apos;re about to supercharge your setup with {model.name}. 
+          <br />
           Ready to push the envelope?
         </Text>
         <Callout title="Model Specs" color="blue" className="mt-4">
@@ -83,7 +83,7 @@ export function ChangeModelModal({
     <Modal title="Model Swap: Upgrade or Sidegrade?" onOutsideClick={onCancel}>
       <div className="mb-4">
         <Text className="text-lg mb-2">
-          You&apos;re about to trade in your {existingModel.model_name} for a shiny new {newModel.model_name}. Bold move.
+          You&apos;re about to trade in your {existingModel.model_dim} for a shiny new {newModel.model_name}. Bold move.
         </Text>
         <Callout title="New Hotness Specs" color="blue" className="mt-4">
           <div className="flex flex-col gap-y-2">

@@ -8,7 +8,7 @@ import { FiPackage } from "react-icons/fi";
 import useSWR, { mutate } from "swr";
 import { ModelOption, ModelSelector } from "./components/ModelSelector";
 import { useState } from "react";
-import { ModelSelectionConfirmationModal, ProviderCreationModal } from "./components/ModelSelectionConfirmation";
+import { ModelSelectionConfirmationModal, ModelSelectionConfirmationModalCloud, ProviderCreationModal } from "./components/ModelSelectionConfirmation";
 import { ReindexingProgressTable } from "./components/ReindexingProgressTable";
 import { Modal } from "@/components/Modal";
 import {
@@ -24,11 +24,10 @@ import {
 import { ErrorCallout } from "@/components/ErrorCallout";
 import { Connector, ConnectorIndexingStatus } from "@/lib/types";
 import Link from "next/link";
-import { CustomModelForm } from "./components/CustomModelForm";
-import { FaLock } from "react-icons/fa";
 import { ChangeCredentialsModal, ChangeModelModal, DeleteCredentialsModal, ModelNotConfiguredModal, SelectModelModal } from "./components/Providers";
 import OpenSourceEmbeddingSelectionPage from "./OpenSourceEmbeddingSelectionPage";
 import CloudEmbeddingPage from "./CloudEmbeddingPage";
+import { ProviderCreation, ProviderCreationModal2 } from "./ProviderCreation";
 
 function Main() {
   const [openToggle, setOpenToggle] = useState(true);
@@ -39,7 +38,6 @@ function Main() {
   const [showDeleteCredentialsModal, setShowDeleteCredentialsModal] = useState(false);
   const [changeCredentials, setChangeCredentials] = useState<CloudEmbeddingProvider | null>(null);
   const [tentativeNewCloudEmbeddingModel, setTentativeNewCloudEmbeddingModel] = useState<CloudEmbeddingModel | null>(null);
-  const [tentativeNewEmbeddingModel, setTentativeNewEmbeddingModel] = useState<CloudEmbeddingModel | null>(null);
   const [tentativeNewOpenmbeddingModel, setTentativeNewOpenmbeddingModel] = useState<EmbeddingModelDescriptor | null>(null);
   const [isCancelling, setIsCancelling] = useState<boolean>(false);
   const [showAddConnectorPopup, setShowAddConnectorPopup] = useState<boolean>(false);
@@ -135,7 +133,7 @@ function Main() {
       }
     );
     if (response.ok) {
-      setTentativeNewEmbeddingModel(null);
+      setTentativeNewCloudEmbeddingModel(null);
       mutate("/api/secondary-index/get-secondary-embedding-model");
       if (!connectors || !connectors.length) {
         setShowAddConnectorPopup(true);
@@ -150,7 +148,7 @@ function Main() {
       method: "POST",
     });
     if (response.ok) {
-      setTentativeNewEmbeddingModel(null);
+      setTentativeNewCloudEmbeddingModel(null);
       mutate("/api/secondary-index/get-secondary-embedding-model");
     } else {
       alert(
@@ -185,7 +183,7 @@ function Main() {
       }
     );
     if (response.ok) {
-      setTentativeNewEmbeddingModel(null);
+      setTentativeNewCloudEmbeddingModel(null);
       mutate("/api/secondary-index/get-secondary-embedding-model");
       if (!connectors || !connectors.length) {
         setShowAddConnectorPopup(true);
@@ -245,6 +243,15 @@ function Main() {
         />
       )}
 
+
+      {tenativelyNewProvider && (
+
+        <ProviderCreationModal2
+          selectedProvider={tenativelyNewProvider}
+          onConfirm={() => null}
+          onCancel={() => setTenativelyNewProvider(null)}
+        />
+      )}
       {changeCredentials && (
         <ChangeCredentialsModal
           provider={changeCredentials}
@@ -253,14 +260,14 @@ function Main() {
         />
       )}
 
-      {showSelectModelModal && tentativeNewCloudEmbeddingModel && (
+      {tentativeNewCloudEmbeddingModel && (
         <SelectModelModal
           model={tentativeNewCloudEmbeddingModel}
           onConfirm={() => {
             setShowSelectModelModal(false);
             onConfirm(tentativeNewCloudEmbeddingModel);
           }}
-          onCancel={() => setShowSelectModelModal(false)}
+          onCancel={() => setTentativeNewCloudEmbeddingModel(null)}
         />
       )}
 
@@ -325,7 +332,7 @@ function Main() {
           <OpenSourceEmbeddingSelectionPage onSelectOpenSource={onSelectOpenSource} currentModelName={currentModelName} />
         ) : (
           <CloudEmbeddingPage
-            setTentativeNewEmbeddingModel={setTentativeNewEmbeddingModel}
+            setTentativeNewEmbeddingModel={setTentativeNewCloudEmbeddingModel}
             setTenativelyNewProvider={setTenativelyNewProvider}
             selectedModel={selectedModel}
             setShowModelNotConfiguredModal={setShowModelNotConfiguredModal}
@@ -335,9 +342,9 @@ function Main() {
         )
       )}
 
-      {/* {tentativeNewEmbeddingModel && (
+      {/* {tenativelyNewProvider && (
         <ModelSelectionConfirmationModal
-          selectedModel={tentativeNewEmbeddingModel}
+          selectedModel={tentativeNewCloudEmbeddingModel}
           isCustom={!AVAILABLE_CLOUD_MODELS.flatMap(provider => provider.models).some(
             (model) => model.name === tentativeNewEmbeddingModel.name
           )}
@@ -346,13 +353,26 @@ function Main() {
         />
       )} */}
 
-      {tenativelyNewProvider && (
+
+      {/* {tentativeNewCloudEmbeddingModel && (
+        <ModelSelectionConfirmationModalCloud
+          selectedModel={tentativeNewCloudEmbeddingModel}
+          isCustom={!AVAILABLE_CLOUD_MODELS.flatMap(provider => provider.models).some(
+            (model) => model.name === tentativeNewCloudEmbeddingModel.name
+          )}
+          onConfirm={() => onConfirm(tentativeNewCloudEmbeddingModel)}
+          onCancel={() => setTentativeNewCloudEmbeddingModel(null)}
+        />
+      )} */}
+
+
+      {/* {tenativelyNewProvider && (
         <ProviderCreationModal
           selectedProvider={tenativelyNewProvider}
           onConfirm={() => null}
           onCancel={() => setTenativelyNewProvider(null)}
         />
-      )}
+      )} */}
 
       {openToggle && (
         <>

@@ -450,8 +450,7 @@ class EmbeddingModel(Base):
 
     # New field for cloud provider relationship
     cloud_provider_id: Mapped[int | None] = mapped_column(ForeignKey("embedding_provider.id"), nullable=True)
-    cloud_provider: Mapped["CloudEmbeddingProvider | None"] = relationship("CloudEmbeddingProvider", back_populates="embedding_models")
-
+    cloud_provider: Mapped["CloudEmbeddingProvider"] = relationship("CloudEmbeddingProvider", back_populates="embedding_models", foreign_keys=[cloud_provider_id])
 
     index_attempts: Mapped[list["IndexAttempt"]] = relationship(
         "IndexAttempt", back_populates="embedding_model"
@@ -863,35 +862,17 @@ class CloudEmbeddingProvider(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String, unique=True)
-    provider_id: Mapped[str] = mapped_column(String, unique=True)
-    api_key: Mapped[str | None] = mapped_column(String, nullable=True)
-    api_base: Mapped[str | None] = mapped_column(String, nullable=True)
-    api_version: Mapped[str | None] = mapped_column(String, nullable=True)
-    
-    # Custom configurations for the provider (e.g., region for AWS)
-    custom_config: Mapped[dict[str, str] | None] = mapped_column(
-        JSON, nullable=True
-    )
-    
-    # Default model for this provider
-    default_model_name: Mapped[str] = mapped_column(String)
-    
-    # Available model names for this provider
-    model_names: Mapped[list[str]] = mapped_column(
-        postgresql.ARRAY(String)
-    )
-    
-    # Whether the provider is currently configured
-    is_configured: Mapped[bool] = mapped_column(Boolean, default=False)
-    is_default_provider: Mapped[bool | None] = mapped_column(Boolean, unique=True)
-    embedding_models: Mapped[list["EmbeddingModel"]] = relationship("EmbeddingModel", back_populates="cloud_provider")
+    api_key: Mapped[str | None] = mapped_column(EncryptedString(), nullable=True)
+    custom_config: Mapped[dict[str, str] | None] = mapped_column(JSON, nullable=True)
+    default_model_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("embedding_model.id"), nullable=True)
 
-    
+    embedding_models: Mapped[list["EmbeddingModel"]] = relationship("EmbeddingModel", back_populates="cloud_provider", foreign_keys="EmbeddingModel.cloud_provider_id")
+    default_model: Mapped["EmbeddingModel"] = relationship("EmbeddingModel", foreign_keys=[default_model_id])
 
     def __repr__(self):
-        return f"<EmbeddingProvider(name='{self.name}', provider_id='{self.provider_id}', default_model='{self.default_model_name}')>"
+        return f"<EmbeddingProvider(name='{self.name}')>"
 
-
+# provider_id, name, api_key, custom_config, default_model (which should reference a model in the EmbeddingModel table), and also keep in mind that each entry in EmbedingModel references it as a foreign key
 
 class DocumentSet(Base):
     __tablename__ = "document_set"

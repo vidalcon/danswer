@@ -6,6 +6,9 @@ from danswer.llm.llm_provider_options import fetch_models_for_provider
 
 if TYPE_CHECKING:
     from danswer.db.models import LLMProvider as LLMProviderModel
+    from danswer.db.models import CloudEmbeddingProvider
+
+    # from danswer.db.models import CloudEmbeddingProvider as CloudEmbeddingProvider
 
 
 class TestLLMRequest(BaseModel):
@@ -95,21 +98,32 @@ class FullLLMProvider(LLMProvider):
 
 class CloudEmbeddingProviderBase(BaseModel):
     name: str
-    api_key: str | None
-    api_base: str | None
-    api_version: str | None
-    custom_config: dict[str, str] | None
-    default_model_name: str
-    default_model_name: str
-    is_configured: bool = False
-    is_default_provider: bool
+    api_key: str | None = None
+    custom_config: dict[str, str] | None = None
+    default_model_id: int | None = None
 
-class CloudEmbeddingProviderUpsertRequest(CloudEmbeddingProviderBase):
-    model_names: list[str]
+    class Config:
+        from_attributes = True
+
+
+
+
+
+class CloudEmbeddingProviderCreate(CloudEmbeddingProviderBase):
+    pass
+
+class CloudEmbeddingProviderUpdate(CloudEmbeddingProviderBase):
+    name: str | None = None
 
 class FullCloudEmbeddingProvider(CloudEmbeddingProviderBase):
     id: int
-    model_names: list[str]
 
-    class Config:
-        orm_mode = True
+    @classmethod
+    def from_request(cls, cloud_provider_model: "CloudEmbeddingProvider") -> "FullCloudEmbeddingProvider":
+        return cls(
+            id=cloud_provider_model.id,
+            name=cloud_provider_model.name,
+            api_key=cloud_provider_model.api_key,
+            custom_config=cloud_provider_model.custom_config,
+            default_model_id= cloud_provider_model.default_model_id
+        )

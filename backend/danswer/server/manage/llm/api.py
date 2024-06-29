@@ -24,7 +24,7 @@ from danswer.llm.utils import test_llm
 from danswer.server.manage.llm.models import FullLLMProvider
 from danswer.server.manage.llm.models import LLMProviderDescriptor
 from danswer.server.manage.llm.models import LLMProviderUpsertRequest
-from danswer.server.manage.llm.models import CloudEmbeddingProviderUpsertRequest
+from danswer.server.manage.llm.models import CloudEmbeddingProviderCreate
 from danswer.server.manage.llm.models import FullCloudEmbeddingProvider
 
 
@@ -129,6 +129,7 @@ def put_llm_provider(
     _: User | None = Depends(current_admin_user),
     db_session: Session = Depends(get_session),
 ) -> FullLLMProvider:
+    
     return upsert_llm_provider(db_session, llm_provider)
 
 
@@ -165,10 +166,9 @@ def list_llm_provider_basics(
 
 
 
-
 @admin_router.put("/embedding-provider")
 def put_cloud_embedding_provider(
-    provider: CloudEmbeddingProviderUpsertRequest,
+    provider: CloudEmbeddingProviderCreate,
     _: User = Depends(current_admin_user),
     db_session: Session = Depends(get_session)
 ) -> FullCloudEmbeddingProvider:

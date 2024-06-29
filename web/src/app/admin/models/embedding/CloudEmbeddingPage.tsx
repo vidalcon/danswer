@@ -19,7 +19,8 @@ import {
     INVALID_OLD_MODEL,
     checkModelNameIsValid,
     fillOutEmeddingModelDescriptor,
-    EmbeddingModelDescriptor
+    EmbeddingModelDescriptor,
+    CloudEmbeddingProviderFull
 } from "./components/embeddingModels";
 import { ErrorCallout } from "@/components/ErrorCallout";
 import { Connector, ConnectorIndexingStatus } from "@/lib/types";
@@ -37,10 +38,19 @@ export default function CloudEmbeddingPage({ setTentativeNewEmbeddingModel, setT
     setShowModelNotConfiguredModal: React.Dispatch<React.SetStateAction<CloudEmbeddingProvider | null>>,
     setChangeCredentials: React.Dispatch<React.SetStateAction<CloudEmbeddingProvider | null>>
 }) {
+
+    let providers: CloudEmbeddingProviderFull[] = []
+    AVAILABLE_CLOUD_MODELS.forEach((model, ind) => {
+        let temporary_model: CloudEmbeddingProviderFull = { ...model, "configured": ind == 3 }
+
+        providers.push(temporary_model)
+
+    })
+
     return (<div>
         <Title className="mt-8">Configure Credentials</Title>
         <div className="gap-4 mt-2 pb-10 flex content-start flex-wrap">
-            {AVAILABLE_CLOUD_MODELS.map((provider, ind) => (
+            {providers.map((provider, ind) => (
                 <div
                     key={ind}
                     className="p-4 border border-border rounded-lg shadow-md bg-hover-light w-96 flex flex-col"
@@ -50,14 +60,17 @@ export default function CloudEmbeddingPage({ setTentativeNewEmbeddingModel, setT
                         <p className="my-auto">
                             {provider.name}
                         </p>
-                        <button onClick={() => setTenativelyNewProvider(provider)} className="cursor-pointer ml-auto">
-                            {!provider.configured && <FaLock />}
+                        <button onClick={() => {
+                            console.log(provider)
+                            setTenativelyNewProvider(provider)
+                        }} className="cursor-pointer ml-auto">
+                            {!provider && <FaLock />}
                         </button>
                     </div>
                     <div>{provider.description}</div>
 
                     <div className="mt-4">
-                        {provider.models.map((model, index) => (
+                        {provider.embedding_models.map((model, index) => (
                             <div
                                 key={index}
                                 className={`p-3 mb-2 border-2 border-neutral-300 border-opacity-40 rounded-md rounded cursor-pointer ${provider.configured
@@ -67,19 +80,20 @@ export default function CloudEmbeddingPage({ setTentativeNewEmbeddingModel, setT
                                     : 'hover:bg-rose-50'
                                     }`}
                                 onClick={() => {
-                                    if (model.name === "") {
+                                    console.log(model.is_configured)
+                                    if (model.is_configured) {
                                         return;
-                                    } else if (provider.configured) {
+                                    } else if (!provider.configured) {
                                         setTentativeNewEmbeddingModel(model);
                                     } else {
-                                        setShowModelNotConfiguredModal(provider);
+                                        setTentativeNewEmbeddingModel(model)
                                     }
                                 }}
                             >
                                 <div className="flex justify-between">
                                     <div className="font-medium">{model.name}</div>
                                     <p className="text-sm flex-none">
-                                        {provider.configured ? model.is_configured ? "Selected" : "Unselected" : "Unconfigured"}
+                                        {provider.configured ? model.enabled ? "Selected" : "Unselected" : "Unconfigured"}
                                     </p>
                                 </div>
                                 <div className="text-sm text-gray-600">{model.description}</div>
@@ -90,10 +104,12 @@ export default function CloudEmbeddingPage({ setTentativeNewEmbeddingModel, setT
                     <div className="text-sm flex justify-between mt-1 mx-2">
                         <button
                             onClick={() => {
-                                if (provider.configured) {
-                                    setChangeCredentials(provider);
+                                if (!provider.configured) {
+                                    setTenativelyNewProvider(provider)
+                                    // setShowModelNotConfiguredModal(provider);
                                 } else {
-                                    setShowModelNotConfiguredModal(provider);
+                                    
+                                    setChangeCredentials(provider);
                                 }
                             }}
                             className="hover:underline cursor-pointer"

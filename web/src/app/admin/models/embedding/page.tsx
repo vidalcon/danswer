@@ -43,9 +43,13 @@ export interface EmbeddingDetails {
 
 function Main() {
   const [openToggle, setOpenToggle] = useState(true);
-  const [tenativelyNewProvider, setTentativelyNewProvider] =
+  const [tentativelyNewProvider, setTentativelyNewProvider] =
     useState<CloudEmbeddingProvider | null>(null);
-  const [newEnabledProviders, setNewEnabledProvides] = useState<string[]>([]);
+
+  const [newEnabledProviders, setNewEnabledProviders] = useState<string[]>([]);
+  const [newUnenabledProviders, setNewUnenabledProviders] = useState<string[]>(
+    []
+  );
 
   const [showModelNotConfiguredModal, setShowModelNotConfiguredModal] =
     useState<CloudEmbeddingProvider | null>(null);
@@ -196,9 +200,35 @@ function Main() {
 
   const handleChangeCredentials = async (apiKey: string) => {
     console.log(
-      `Changing credentials for ${tenativelyNewProvider?.name} with new API key: ${apiKey}`
+      `Changing credentials for ${tentativelyNewProvider?.name} with new API key: ${apiKey}`
     );
     setChangeCredentials(null);
+  };
+
+  const clientsideAddProvider = (provider: CloudEmbeddingProvider) => {
+    const providerName = provider.name;
+    setNewEnabledProviders((newEnabledProviders) => [
+      ...newEnabledProviders,
+      providerName,
+    ]);
+    setNewUnenabledProviders((newUnenabledProviders) =>
+      newUnenabledProviders.filter(
+        (givenProvidername) => givenProvidername != providerName
+      )
+    );
+  };
+
+  const clientsideRemoveProvider = (provider: CloudEmbeddingProvider) => {
+    const providerName = provider.name;
+    setNewEnabledProviders((newEnabledProviders) =>
+      newEnabledProviders.filter(
+        (givenProvidername) => givenProvidername != providerName
+      )
+    );
+    setNewUnenabledProviders((newUnenabledProviders) => [
+      ...newUnenabledProviders,
+      providerName,
+    ]);
   };
 
   return (
@@ -232,16 +262,13 @@ function Main() {
         />
       )}
 
-      {tenativelyNewProvider && (
+      {tentativelyNewProvider && (
         <ProviderCreationModal2
-          selectedProvider={tenativelyNewProvider}
+          selectedProvider={tentativelyNewProvider}
           onConfirm={() => {
             setTentativelyNewProvider(showModelNotConfiguredModal);
             setShowModelNotConfiguredModal(null);
-            setNewEnabledProvides((newEnabledProviders) => [
-              ...newEnabledProviders,
-              tenativelyNewProvider.name,
-            ]);
+            clientsideAddProvider(tentativelyNewProvider);
           }}
           onCancel={() => setTentativelyNewProvider(null)}
         />
@@ -249,6 +276,7 @@ function Main() {
       {changeCredentials && (
         <ChangeCredentialsModal
           onDeleted={() => {
+            clientsideRemoveProvider(changeCredentials);
             setChangeCredentials(null);
           }}
           provider={changeCredentials}
@@ -281,7 +309,7 @@ function Main() {
 
       {showDeleteCredentialsModal && (
         <DeleteCredentialsModal
-          modelProvider={tenativelyNewProvider!}
+          modelProvider={tentativelyNewProvider!}
           onConfirm={() => {
             setShowDeleteCredentialsModal(false);
           }}
@@ -340,6 +368,7 @@ function Main() {
           <CloudEmbeddingPage
             embeddingProviderDetails={embeddingProviderDetails}
             newEnabledProviders={newEnabledProviders}
+            newUnenabledProviders={newUnenabledProviders}
             setTentativeNewEmbeddingModel={setTentativeNewCloudEmbeddingModel}
             setTentativelyNewProvider={setTentativelyNewProvider}
             selectedModel={selectedModel}

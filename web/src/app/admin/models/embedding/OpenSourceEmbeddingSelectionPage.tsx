@@ -14,11 +14,7 @@ import { Modal } from "@/components/Modal";
 import {
     CloudEmbeddingProvider,
     CloudEmbeddingModel,
-    AVAILABLE_CLOUD_MODELS,
     AVAILABLE_MODELS,
-    INVALID_OLD_MODEL,
-    checkModelNameIsValid,
-    fillOutEmeddingModelDescriptor,
     EmbeddingModelDescriptor
 } from "./components/embeddingModels";
 import { ErrorCallout } from "@/components/ErrorCallout";
@@ -45,7 +41,6 @@ export default function OpenSourceEmbeddingSelectionPage(
                 )}
                 setSelectedModel={onSelectOpenSource}
             />
-
 
             <Title className="mt-8">Alternatively, here are some cloud-based models to choose from!</Title>
             <Text className="mb-4">

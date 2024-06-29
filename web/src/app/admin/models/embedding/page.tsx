@@ -248,7 +248,11 @@ function Main() {
 
         <ProviderCreationModal2
           selectedProvider={tenativelyNewProvider}
-          onConfirm={() => null}
+          onConfirm={() => {
+            setTenativelyNewProvider(showModelNotConfiguredModal);
+            setShowModelNotConfiguredModal(null)
+          }
+          }
           onCancel={() => setTenativelyNewProvider(null)}
         />
       )}

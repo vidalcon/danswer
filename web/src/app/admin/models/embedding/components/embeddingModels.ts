@@ -5,7 +5,6 @@ export type ProviderId = "openai" | "cohere" | "voyage" | "google";
 export interface CloudEmbeddingModel {
   name: string;
   description: string;
-  is_configured: boolean;
   model_dim: number;
   normalize: boolean;
   link: string;
@@ -129,7 +128,7 @@ export const AVAILABLE_CLOUD_MODELS: CloudEmbeddingProvider[] = [
       {
         name: "text-embedding-3-small",
         description: "OpenAI's newer, more efficient embedding model. Good balance of performance and cost.",
-        is_configured: true,
+        
         model_dim: 1536,
         normalize: true,
         link: "https://platform.openai.com/docs/guides/embeddings",
@@ -145,7 +144,7 @@ export const AVAILABLE_CLOUD_MODELS: CloudEmbeddingProvider[] = [
       {
         name: "text-embedding-3-large",
         description: "OpenAI's large embedding model. Best performance, but more expensive.",
-        is_configured: true,
+        
         model_dim: 3072,
         normalize: true,
         link: "https://platform.openai.com/docs/guides/embeddings",
@@ -173,7 +172,7 @@ export const AVAILABLE_CLOUD_MODELS: CloudEmbeddingProvider[] = [
       {
         name: "embed-english-v3.0",
         description: "Cohere's English embedding model. Good performance for English-language tasks.",
-        is_configured: true,
+        
         model_dim: 1024,
         normalize: true,
         link: "https://docs.cohere.com/docs/cohere-embed",
@@ -190,7 +189,7 @@ export const AVAILABLE_CLOUD_MODELS: CloudEmbeddingProvider[] = [
       {
         name: "embed-english-light-v3.0",
         description: "Cohere's lightweight English embedding model. Faster and more efficient for simpler tasks.",
-        is_configured: true,
+        
         model_dim: 384,
         normalize: true,
         link: "https://docs.cohere.com/docs/cohere-embed",
@@ -219,7 +218,7 @@ export const AVAILABLE_CLOUD_MODELS: CloudEmbeddingProvider[] = [
       {
         name: "voyage-large-2-instruct",
         description: "Voyage AI's large embedding model. High performance with instruction fine-tuning.",
-        is_configured: true,
+        
         model_dim: 1024,
         normalize: true,
         link: "https://docs.voyageai.com/docs/embeddings",
@@ -237,7 +236,7 @@ export const AVAILABLE_CLOUD_MODELS: CloudEmbeddingProvider[] = [
       {
         name: "voyage-light-2-instruct",
         description: "Voyage AI's lightweight embedding model. Good balance of performance and efficiency.",
-        is_configured: true,
+        
         model_dim: 1024,
         normalize: true,
         link: "https://docs.voyageai.com/docs/embeddings",
@@ -265,7 +264,6 @@ export const AVAILABLE_CLOUD_MODELS: CloudEmbeddingProvider[] = [
       {
         name: "gecko",
         description: "Google's Gecko embedding model. Powerful and efficient, but requires more setup.",
-        is_configured: false,
         model_dim: 768,
         normalize: true,
         link: "https://cloud.google.com/vertex-ai/generative-ai/docs/model-reference/text-embeddings",

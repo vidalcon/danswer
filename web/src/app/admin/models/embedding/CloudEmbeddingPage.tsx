@@ -64,7 +64,7 @@ export default function CloudEmbeddingPage({ setTentativeNewEmbeddingModel, setT
                             console.log(provider)
                             setTenativelyNewProvider(provider)
                         }} className="cursor-pointer ml-auto">
-                            {!provider && <FaLock />}
+                            {!provider.configured && <FaLock />}
                         </button>
                     </div>
                     <div>{provider.description}</div>
@@ -80,11 +80,9 @@ export default function CloudEmbeddingPage({ setTentativeNewEmbeddingModel, setT
                                     : 'hover:bg-rose-50'
                                     }`}
                                 onClick={() => {
-                                    console.log(model.is_configured)
-                                    if (model.is_configured) {
-                                        return;
-                                    } else if (!provider.configured) {
-                                        setTentativeNewEmbeddingModel(model);
+
+                                    if (!provider.configured) {
+                                        setShowModelNotConfiguredModal(provider);
                                     } else {
                                         setTentativeNewEmbeddingModel(model)
                                     }
@@ -108,7 +106,7 @@ export default function CloudEmbeddingPage({ setTentativeNewEmbeddingModel, setT
                                     setTenativelyNewProvider(provider)
                                     // setShowModelNotConfiguredModal(provider);
                                 } else {
-                                    
+
                                     setChangeCredentials(provider);
                                 }
                             }}

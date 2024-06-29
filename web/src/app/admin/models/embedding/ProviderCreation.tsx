@@ -18,6 +18,7 @@ export function ProviderCreation({
     onConfirm: () => void;
     existingProvider?: CloudEmbeddingProvider;
 }) {
+    const [successfulCredentialUpdate, setSuccessfulCredentialUpdate] = useState(false)
     const [isTesting, setIsTesting] = useState(false);
     const [testError, setTestError] = useState<string>("");
 
@@ -46,6 +47,28 @@ export function ProviderCreation({
 
         try {
             const customConfig = Object.fromEntries(values.custom_config);
+            const body = JSON.stringify({
+                api_key: values.api_key,
+                provider: values.name.toLowerCase().split(" ")[0],
+                default_model_id: values.name
+            })
+
+            const initialResponse = await fetch("/api/admin/llm/test-embedding", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: body
+            });
+
+            if (!initialResponse.ok) {
+                const errorMsg = (await initialResponse.json()).detail;
+                setTestError(errorMsg);
+                setIsTesting(false);
+                setSubmitting(false);
+                return;
+            }
+
 
             const response = await fetch(EMBEDDING_PROVIDERS_ADMIN_URL, {
                 method: "PUT",
@@ -104,24 +127,6 @@ export function ProviderCreation({
                         </div>
                     </Callout>
 
-                    <div>
-                        <Label>Custom Config</Label>
-                        <FieldArray name="custom_config">
-                            {({ push, remove }: ArrayHelpers) => (
-                                <div>
-                                    {values.custom_config.map((_, index) => (
-                                        <div key={index} className="flex items-center space-x-2 mb-2">
-                                            <Field name={`custom_config.${index}.0`} placeholder="Key" className="flex-grow p-2 border rounded" />
-                                            <Field name={`custom_config.${index}.1`} placeholder="Value" className="flex-grow p-2 border rounded" />
-                                            <Button type="button" onClick={() => remove(index)} icon={FiTrash} color="red" />
-                                        </div>
-                                    ))}
-                                    <Button type="button" onClick={() => push(['', ''])} icon={FiPlus}>Add Config</Button>
-                                </div>
-                            )}
-                        </FieldArray>
-                    </div>
-
                     {testError && (
                         <Callout title="Error" color="red">
                             {testError}
@@ -130,10 +135,7 @@ export function ProviderCreation({
 
                     <Button type="submit" color="blue" className="w-full" disabled={isSubmitting}>
                         {isTesting ? <LoadingAnimation /> : (existingProvider ? "Update" : "Create")}
-                    </Button>
-
-                    <pre>{JSON.stringify(values, null, 2)}</pre>
-                    <pre>{JSON.stringify(errors, null, 2)}</pre>
+                    </Button> 
                 </Form>
             )}
         </Formik>
@@ -154,10 +156,8 @@ export function ProviderCreationModal2({
     existingProvider?: CloudEmbeddingProvider;
 }) {
     return (
-        <Modal title={`Configure ${selectedProvider.name}`} onOutsideClick={onCancel}>
+        <Modal title={`Configure ${selectedProvider.name}`} onOutsideClick={onCancel} icon={selectedProvider.icon}>
             <div>
-                {selectedProvider.icon({ size: 40 })}
-
                 <ProviderCreation
                     selectedProvider={selectedProvider}
                     onConfirm={onConfirm}

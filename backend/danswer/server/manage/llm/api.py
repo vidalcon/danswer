@@ -18,10 +18,14 @@ from danswer.db.llm import upsert_cloud_embedding_provider
 from danswer.db.models import User
 from danswer.llm.factory import get_default_llm
 from danswer.llm.factory import get_llm
+from danswer.llm.factory import get_embedding
+from danswer.llm.factory import Embedding
+
 from danswer.llm.llm_provider_options import fetch_available_well_known_llms
 from danswer.llm.llm_provider_options import WellKnownLLMProviderDescriptor
 from danswer.llm.utils import test_llm
 from danswer.server.manage.llm.models import FullLLMProvider
+
 from danswer.server.manage.llm.models import LLMProviderDescriptor
 from danswer.server.manage.llm.models import LLMProviderUpsertRequest
 from danswer.server.manage.llm.models import CloudEmbeddingProviderCreate
@@ -29,6 +33,8 @@ from danswer.server.manage.llm.models import FullCloudEmbeddingProvider
 
 
 from danswer.server.manage.llm.models import TestLLMRequest
+from danswer.server.manage.llm.models import TestEmbeddingRequest
+
 from danswer.utils.logger import setup_logger
 from danswer.utils.threadpool_concurrency import run_functions_tuples_in_parallel
 
@@ -44,6 +50,26 @@ def fetch_llm_options(
     _: User | None = Depends(current_admin_user),
 ) -> list[WellKnownLLMProviderDescriptor]:
     return fetch_available_well_known_llms()
+
+
+@admin_router.post("/test-embedding")
+def test_embedding_configuration(
+    test_llm_request: TestEmbeddingRequest,
+    _: User | None = Depends(current_admin_user),
+) -> None:
+    try:
+        embedding = Embedding.create(
+            api_key=test_llm_request.api_key, provider=test_llm_request.provider
+        )
+        result = embedding.embed("Test embedding")
+        return {"success": True, "embedding_length": len(result)}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(
+            f"An error occurred while testing embedding: {str(e)}", exc_info=True
+        )
+        raise HTTPException(status_code=500, detail=f"An unexpected error occurred- {e}")
 
 
 @admin_router.post("/test")
@@ -129,7 +155,7 @@ def put_llm_provider(
     _: User | None = Depends(current_admin_user),
     db_session: Session = Depends(get_session),
 ) -> FullLLMProvider:
-    
+
     return upsert_llm_provider(db_session, llm_provider)
 
 
@@ -165,11 +191,21 @@ def list_llm_provider_basics(
     ]
 
 
+@basic_router.get("/embedding-provider")
+def list_llm_provider_basics(
+    _: User | None = Depends(current_user),
+    db_session: Session = Depends(get_session),
+) -> list[LLMProviderDescriptor]:
+    return [
+        LLMProviderDescriptor.from_model(llm_provider_model)
+        for llm_provider_model in fetch_existing_llm_providers(db_session)
+    ]
+
 
 @admin_router.put("/embedding-provider")
 def put_cloud_embedding_provider(
     provider: CloudEmbeddingProviderCreate,
     _: User = Depends(current_admin_user),
-    db_session: Session = Depends(get_session)
+    db_session: Session = Depends(get_session),
 ) -> FullCloudEmbeddingProvider:
     return upsert_cloud_embedding_provider(db_session, provider)

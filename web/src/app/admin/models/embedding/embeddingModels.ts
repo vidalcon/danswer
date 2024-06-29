@@ -44,6 +44,8 @@ export interface AIProvider {
   icon: ({ size, className, }: IconProps) => JSX.Element;
   description: string;
   configured: boolean
+  apiLink: string
+  costslink?: string
 }
 
 
@@ -57,7 +59,8 @@ export const providers: AIProvider[] = [
     website: "https://openai.com",
     icon: OpenAIIcon,
     description: "Leading AI research company known for GPT models and DALL-E.",
-    configured: true
+    configured: true,
+    apiLink: "https://platform.openai.com/api-keys"
   },
   {
     id: "cohere",
@@ -65,7 +68,8 @@ export const providers: AIProvider[] = [
     website: "https://cohere.ai",
     icon: CohereIcon,
     description: "Specializes in NLP models for various text-based tasks.",
-    configured: true
+    configured: true,
+    apiLink: "https://platform.openai.com/api-keys"
   },
   {
     id: "voyage",
@@ -73,7 +77,8 @@ export const providers: AIProvider[] = [
     website: "https://www.voyageai.com",
     icon: VoyageIcon,
     description: "Focuses on advanced language models and embeddings.",
-    configured: true
+    configured: true,
+    apiLink: "https://platform.openai.com/api-keys"
   },
   {
     id: "google",
@@ -81,7 +86,8 @@ export const providers: AIProvider[] = [
     website: "https://ai.google",
     icon: GoogleIcon,
     description: "Offers a wide range of AI services including language and vision models.",
-    configured: false
+    configured: false,
+    apiLink: "https://platform.openai.com/api-keys"
   },
 ];
 

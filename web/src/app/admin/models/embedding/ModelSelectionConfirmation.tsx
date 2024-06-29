@@ -35,17 +35,7 @@ export function ModelSelectionConfirmation({
       </Text>
 
 
-      {isCustom && <Callout title="IMPORTANT" color="blue" className="mt-4 ">
-        <div className="flex flex-col gap-y-2">
-          You will need to retrieve your API credentials for this updates.
-          Store them with a foreign preference
-          <Label>API Key</Label>
-          <input type="password" className="text-lg  w-full p-1" />
-          <a href={selectedModel?.link} target="_blank" className="underline cursor-pointer">
-            Retrieve credentials here
-          </a>
-        </div>
-      </Callout>}
+
 
       {/* TODO Change this back- ensure functional */}
       {!isCustom && (
@@ -98,58 +88,33 @@ export function ModelSelectionConfirmationModal({
 
 export function ProviderCreation({
   selectedProvider,
-  isCustom,
   onConfirm,
 }: {
   selectedProvider: AIProvider;
-  isCustom: boolean;
   onConfirm: () => void;
 }) {
-  if (selectedModel?.query_prefix == "") {
-    console.log('hi')
-  }
+
   return (
     <div className="mb-4">
-      <Text className="text-lg mb-4">
-        You have selected: <b>{selectedModel.model_name}</b>. Are you sure you
-        want to update to this new embedding model?
-      </Text>
+
       <Text className="text-lg mb-2">
-        We will re-index all your documents in the background so you will be
-        able to continue to use Danswer as normal with the old model in the
-        meantime. Depending on how many documents you have indexed, this may
-        take a while.
-      </Text>
-      <Text className="text-lg mb-2">
-        <i>NOTE:</i> this re-indexing process will consume more resources than
-        normal. If you are self-hosting, we recommend that you allocate at least
-        16GB of RAM to Danswer during this process.
+        You are setting the credentials for this provider. To access this information, follow the instructions <a className="cursor-pointer underline" target="_blank" href={selectedProvider.apiLink}>here</a>  and gather your "API KEY".
       </Text>
 
+      <p>
+        Please note that using this will cost around $4000! Learn more about costs at <a>this page</a>.
+      </p>
 
-      {isCustom && <Callout title="IMPORTANT" color="blue" className="mt-4 ">
+      <Callout title="IMPORTANT" color="blue" className="mt-4 ">
         <div className="flex flex-col gap-y-2">
           You will need to retrieve your API credentials for this updates.
-          Store them with a foreign preference
           <Label>API Key</Label>
           <input type="password" className="text-lg  w-full p-1" />
-          <a href={selectedModel?.link} target="_blank" className="underline cursor-pointer">
-            Retrieve credentials here
+          <a href={selectedProvider.apiLink} target="_blank" className="underline cursor-pointer">
+            Learn more here
           </a>
         </div>
-      </Callout>}
-
-      {/* TODO Change this back- ensure functional */}
-      {!isCustom && (
-        <Callout title="IMPORTANT" color="yellow" className="mt-4">
-          We&apos;ve detected that this is a custom-specified embedding model.
-          Since we have to download the model files before verifying the
-          configuration&apos;s correctness, we won&apos;t be able to let you
-          know if the configuration is valid until <b>after</b> we start
-          re-indexing your documents. If there is an issue, it will show up on
-          this page as an indexing error on this page after clicking Confirm.
-        </Callout>
-      )}
+      </Callout>
 
       <div className="flex mt-8">
         <Button className="mx-auto" color="green" onClick={onConfirm}>
@@ -161,22 +126,19 @@ export function ProviderCreation({
 }
 
 export function ProviderCreationModal({
-  selectedModel,
-  isCustom,
+  selectedProvider,
   onConfirm,
   onCancel,
 }: {
-  selectedModel: AIProvider;
-  isCustom: boolean;
+  selectedProvider: AIProvider;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
   return (
-    <Modal title="Update Embedding Model" onOutsideClick={onCancel}>
+    <Modal title={`Configure ${selectedProvider.name}`} onOutsideClick={onCancel}>
       <div>
         <ProviderCreation
-          selectedModel={selectedModel} 
-          isCustom={isCustom}
+          selectedProvider={selectedProvider}
           onConfirm={onConfirm}
         />
       </div>

@@ -68,7 +68,7 @@ import openaiIcon from "../../../public/Openai.svg";
 import discourseIcon from "../../../public/Discourse.png";
 import clickupIcon from "../../../public/Clickup.svg";
 import cohereIcon from "../../../public/Cohere.svg";
-import voyageIcon from "../../../public/Voyage.jpg";
+import voyageIcon from "../../../public/Voyage.png";
 import googleIcon from "../../../public/Google.webp";
 
 

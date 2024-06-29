@@ -28,6 +28,7 @@ import { CustomModelForm } from "./CustomModelForm";
 import { OpenAiLogo } from "@phosphor-icons/react";
 import Image from "next/image";
 import { FaConciergeBell, FaKey, FaLock } from "react-icons/fa";
+import { ChangeCredentialsModal, ChangeModelModal, DeleteCredentialsModal, ModelNotConfiguredModal, SelectModelModal } from "./Providers";
 
 function Main() {
 
@@ -36,6 +37,11 @@ function Main() {
 
   const [tenativelyNewProvider, setTenativelyNewProvider] =
     useState<AIProvider | null>(null);
+  const [showModelNotConfiguredModal, setShowModelNotConfiguredModal] = useState<AIProvider | null>(null);
+  const [showSelectModelModal, setShowSelectModelModal] = useState(false);
+  const [showChangeModelModal, setShowChangeModelModal] = useState(false);
+  const [showDeleteCredentialsModal, setShowDeleteCredentialsModal] = useState(false);
+  const [changeCredentials, setChangeCredentials] = useState<AIProvider | null>(null);
 
 
   const [tentativeNewCloudEmbeddingModel, setTentativeNewCloudEmbeddingModel] =
@@ -152,6 +158,15 @@ function Main() {
 
   const selectedModel = AVAILABLE_CLOUD_MODELS[0]
 
+  const handleChangeCredentials = async (apiKey: string) => {
+    // Implement the logic to change the credentials
+    console.log(`Changing credentials for ${tenativelyNewProvider?.name} with new API key: ${apiKey}`);
+    // You would typically make an API call here to update the credentials
+    // After successful update:
+    setChangeCredentials(null);
+    // Optionally, refresh the provider data
+    // mutate("/api/providers");
+  };
 
 
   return (
@@ -162,27 +177,105 @@ function Main() {
         which then power Danswer&apos;s search.
       </Text>
 
+      {showModelNotConfiguredModal && (
+        <ModelNotConfiguredModal
+          modelProvider={showModelNotConfiguredModal}
+          onConfirm={() => {
+            setTenativelyNewProvider(showModelNotConfiguredModal)
+            setShowModelNotConfiguredModal(null);
+            // Add logic to configure the model provider
+          }}
+          onCancel={() => setShowModelNotConfiguredModal(null)}
+        />
+      )}
+
+      {changeCredentials && (
+        <ChangeCredentialsModal
+          provider={changeCredentials}
+          onConfirm={handleChangeCredentials}
+          onCancel={() => setChangeCredentials(null)}
+        />
+      )}
+
+
+
+      {showSelectModelModal && (
+        <SelectModelModal
+          model={tentativeNewCloudEmbeddingModel as FullCloudbasedEmbeddingModelDescriptor}
+          onConfirm={() => {
+            setShowSelectModelModal(false);
+            onConfirm(tentativeNewCloudEmbeddingModel!);
+          }}
+          onCancel={() => setShowSelectModelModal(false)}
+        />
+      )}
+
+      {showChangeModelModal && (
+        <ChangeModelModal
+          existingModel={currentModel as FullCloudbasedEmbeddingModelDescriptor}
+          newModel={tentativeNewCloudEmbeddingModel as FullCloudbasedEmbeddingModelDescriptor}
+          onConfirm={() => {
+            setShowChangeModelModal(false);
+            onConfirm(tentativeNewCloudEmbeddingModel!);
+          }}
+          onCancel={() => setShowChangeModelModal(false)}
+        />
+      )}
+
+      {showDeleteCredentialsModal && (
+        <DeleteCredentialsModal
+          modelProvider={tenativelyNewProvider!}
+          onConfirm={() => {
+            setShowDeleteCredentialsModal(false);
+            // Add logic to delete credentials
+          }}
+          onCancel={() => setShowDeleteCredentialsModal(false)}
+        />
+      )}
+
       {currentModel ? (
         <>
-          <Title className="mt-8 mb-2">Current Embedding Model</Title>
+          <Title className="mt-8">Switch your Embedding Model</Title>
 
-          <Text>
-            <ModelOption model={currentModel} />
+          <Text className="mb-4">
+            If the current model is not working for you, you can update
+            your model choice below. Note that this will require a
+            complete re-indexing of all your documents across every
+            connected source. We will take care of this in the background,
+            but depending on the size of your corpus, this could take
+            hours, day, or even weeks. You can monitor the progress of the
+            re-indexing on this page.
           </Text>
+
+          {currentModel ? (
+            <>
+              <Title className="mt-8 mb-2">Current Embedding Model</Title>
+
+              <Text>
+                <ModelOption model={currentModel} />
+              </Text>
+            </>
+          ) : (
+            newModelSelection &&
+            (!connectors || !connectors.length) && (
+              <>
+                <Title className="mt-8 mb-2">Current Embedding Model</Title>
+
+                <Text>
+                  <ModelOption model={newModelSelection} />
+                </Text>
+              </>
+            )
+          )}
+
         </>
       ) : (
-        newModelSelection &&
-        (!connectors || !connectors.length) && (
-          <>
-            <Title className="mt-8 mb-2">Current Embedding Model</Title>
-
-            <Text>
-              <ModelOption model={newModelSelection} />
-            </Text>
-          </>
-        )
+        <>
+          <Title className="mt-8 mb-4">Choose your Embedding Model</Title>
+        </>
       )}
-      <div className="mt-8 w-full  divide-x-2 divide-solid divide-black grid grid-cols-2 gap-x-2">
+
+      <div className="mt-8 w-full mb-12  divide-x-2 divide-solid divide-black grid grid-cols-2 gap-x-2">
         <button onClick={() => setOpenToggle(true)} className={`py-4 font-bold ${openToggle ? " underline" : "hover:underline"}`}>
           Open source
         </button>
@@ -191,8 +284,204 @@ function Main() {
         <button onClick={() => setOpenToggle(false)} className={`font-bold ${!openToggle ? " underline" : "hover:underline"}`}>
           Hosted
         </button>
-
       </div>
+
+
+
+
+
+
+      {!showAddConnectorPopup &&
+        (!newModelSelection ?
+          (
+            openToggle ?
+              <div>
+                <ModelSelector
+                  modelOptions={AVAILABLE_MODELS.filter(
+                    (modelOption) => modelOption.model_name !== currentModelName
+                  )}
+                  setSelectedModel={onSelect}
+                />
+
+                <Title className="mt-8">Alternatively, here are some cloud-based models to choose from!</Title>
+
+                <Text className="mb-4">
+                  They require API keys and run in the cloud of the respective prodivers.
+                </Text>
+
+                {/* <ModelSelector
+              modelOptions={AVAILABLE_CLOUD_MODELS.filter(
+                (modelOption) => modelOption.model_name !== currentModelName
+              )}
+              setSelectedModel={onSelect}
+            /> */}
+
+
+                <Text className="mt-6">
+                  Alternatively, (if you know what you&apos;re doing) you can
+                  specify a{" "}
+                  <a
+                    target="_blank"
+                    href="https://www.sbert.net/"
+                    className="text-link"
+                  >
+                    SentenceTransformers
+                  </a>
+                  -compatible model of your choice below. The rough list of
+                  supported models can be found{" "}
+                  <a
+                    target="_blank"
+                    href="https://huggingface.co/models?library=sentence-transformers&sort=trending"
+                    className="text-link"
+                  >
+                    here
+                  </a>
+                  .
+                  <br />
+                  <b>NOTE:</b> not all models listed will work with Danswer, since
+                  some have unique interfaces or special requirements. If in doubt,
+                  reach out to the Danswer team.
+                </Text>
+
+                <div className="w-full flex">
+                  <Card className="mt-4 2xl:w-4/6 mx-auto">
+                    <CustomModelForm onSubmit={onSelect} />
+                  </Card>
+                </div>
+              </div>
+              :
+              <div>
+                {currentModel ? (
+                  <>
+                    <Title className="mt-8">Configure Credentials</Title>
+                  </>
+                ) : (
+                  <>
+                    <Title className="mt-8 mb-4">Choose your Embedding Model</Title>
+                  </>
+                )}
+                <div className="gap-4 mt-2 pb-10 flex content-start flex-wrap">
+                  {providers.map((provider, ind) => {
+                    const providerModels = AVAILABLE_CLOUD_MODELS.filter(model => model.provider_id === provider.id);
+                    // const activeModel = activeModels[provider.id] || (providerModels[0]?.model_name ?? '');
+
+                    return (
+                      <div
+                        key={ind}
+                        className="p-4 border border-border rounded-lg shadow-md bg-hover-light w-96 flex flex-col"
+                      >
+                        <div className="font-bold text-neutral-900 text-lg items-center py-1 gap-x-2 flex">
+                          {provider.icon({ size: 40 })}
+                          <p className="my-auto">
+                            {provider.name}
+                          </p>
+                          <button onClick={() => setTenativelyNewProvider(provider)} className="cursor-pointer ml-auto">
+                            {!provider.configured && <FaLock />}
+                          </button>
+                        </div>
+                        <div>{provider.description}</div>
+
+
+
+                        <div className="mt-4">
+                          {providerModels.map((model, index) => (
+                            <div
+                              key={index}
+                              className={`p-3 mb-2 border-2  border-neutral-300 border-opacity-40 rounded-md rounded cursor-pointer ${provider.configured ? selectedModel.model_name == model.model_name ? 'bg-teal-50 border border-blue-300' : 'hover:bg-blue-50' : 'hover:bg-rose-50'
+                                }`}
+                              onClick={() => {
+                                if (model.enabled) {
+                                  return
+                                }
+                                else if (provider.configured) {
+                                  setTentativeNewEmbeddingModel(model)
+                                }
+                                else {
+                                  setShowModelNotConfiguredModal(provider)
+                                }
+                              }}
+                            >
+                              <div className="flex justify-between">
+                                <div className="font-medium">{model.model_name}</div>
+                                <p className="text-sm flex-none">
+                                  {provider.configured ? model.enabled ? "Selected" : "Unselected" : "Unconfigured"}
+                                </p>
+                              </div>
+                              <div className="text-sm text-gray-600">{model.description}</div>
+                              <div className="text-xs text-gray-500">
+                                Dimensions: {model.model_dim} | Price: ${model.pricePerMillion?.toFixed(3) ?? 'N/A'} per million tokens
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="text-sm  flex justify-between mt-1 mx-2">
+                          <button onClick={() => {
+                            if (provider.configured) {
+                              setChangeCredentials(provider);
+                            } else {
+
+                              // setShowSelectModelModal(p)
+                            }
+                          }}
+                            className="hover:underline cursor-pointer">
+                            {provider.configured ? "Swap credentials" : 'Configure credentials'}
+                          </button>
+                          <a className="hover:underline cursor-pointer">
+                            Learn more
+                          </a>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+              </div>
+
+
+          ) : (
+            connectors &&
+            connectors.length > 0 && (
+              <div>
+                <Title className="mt-8">Current Upgrade Status</Title>
+                <div className="mt-4">
+                  <div className="italic text-sm mb-2">
+                    Currently in the process of switching to:
+                  </div>
+                  <ModelOption model={newModelSelection} />
+
+                  <Button
+                    color="red"
+                    size="xs"
+                    className="mt-4"
+                    onClick={() => setIsCancelling(true)}
+                  >
+                    Cancel
+                  </Button>
+
+                  <Text className="my-4">
+                    The table below shows the re-indexing progress of all existing
+                    connectors. Once all connectors have been re-indexed
+                    successfully, the new model will be used for all search
+                    queries. Until then, we will use the old model so that no
+                    downtime is necessary during this transition.
+                  </Text>
+
+                  {isLoadingOngoingReIndexingStatus ? (
+                    <ThreeDotsLoader />
+                  ) : ongoingReIndexingStatus ? (
+                    <ReindexingProgressTable
+                      reindexingProgress={ongoingReIndexingStatus}
+                    />
+                  ) : (
+                    <ErrorCallout errorTitle="Failed to fetch re-indexing progress" />
+                  )}
+                </div>
+              </div>
+            )
+          ))}
+
+
       {tentativeNewEmbeddingModel && (
         <ModelSelectionConfirmationModal
           selectedModel={tentativeNewEmbeddingModel}
@@ -223,25 +512,19 @@ function Main() {
 
       {tenativelyNewProvider &&
         <ProviderCreationModal
-          selectedModel={ }
-          isCustom={ }
-          onConfirm={ }
+          selectedProvider={tenativelyNewProvider}
+          onConfirm={() => null}
+          onCancel={() => setTenativelyNewProvider(null)}
         />
       }
 
 
 
 
-      {openToggle ?
 
+
+      {openToggle &&
         <>
-
-
-
-
-
-
-
           {showAddConnectorPopup && (
             <Modal>
               <div>
@@ -291,291 +574,6 @@ function Main() {
             </Modal>
           )}
 
-          {!showAddConnectorPopup &&
-            (!newModelSelection ? (
-              <div>
-                {currentModel ? (
-                  <>
-                    <Title className="mt-8">Switch your Embedding Model</Title>
-
-                    <Text className="mb-4">
-                      If the current model is not working for you, you can update
-                      your model choice below. Note that this will require a
-                      complete re-indexing of all your documents across every
-                      connected source. We will take care of this in the background,
-                      but depending on the size of your corpus, this could take
-                      hours, day, or even weeks. You can monitor the progress of the
-                      re-indexing on this page.
-                    </Text>
-                  </>
-                ) : (
-                  <>
-                    <Title className="mt-8 mb-4">Choose your Embedding Model</Title>
-                  </>
-                )}
-
-                <Text className="mb-4">
-                  Below are a curated selection of quality models that we recommend
-                  you choose from.
-                </Text>
-
-                <ModelSelector
-                  modelOptions={AVAILABLE_MODELS.filter(
-                    (modelOption) => modelOption.model_name !== currentModelName
-                  )}
-                  setSelectedModel={onSelect}
-                />
-
-                <Title className="mt-8">Alternatively, here are some cloud-based models to choose from!</Title>
-
-                <Text className="mb-4">
-                  They require API keys and run in the cloud of the respective prodivers.
-                </Text>
-
-                <ModelSelector
-                  modelOptions={AVAILABLE_CLOUD_MODELS.filter(
-                    (modelOption) => modelOption.model_name !== currentModelName
-                  )}
-                  setSelectedModel={onSelect}
-                />
-
-
-                <Text className="mt-6">
-                  Alternatively, (if you know what you&apos;re doing) you can
-                  specify a{" "}
-                  <a
-                    target="_blank"
-                    href="https://www.sbert.net/"
-                    className="text-link"
-                  >
-                    SentenceTransformers
-                  </a>
-                  -compatible model of your choice below. The rough list of
-                  supported models can be found{" "}
-                  <a
-                    target="_blank"
-                    href="https://huggingface.co/models?library=sentence-transformers&sort=trending"
-                    className="text-link"
-                  >
-                    here
-                  </a>
-                  .
-                  <br />
-                  <b>NOTE:</b> not all models listed will work with Danswer, since
-                  some have unique interfaces or special requirements. If in doubt,
-                  reach out to the Danswer team.
-                </Text>
-
-                <div className="w-full flex">
-                  <Card className="mt-4 2xl:w-4/6 mx-auto">
-                    <CustomModelForm onSubmit={onSelect} />
-                  </Card>
-                </div>
-              </div>
-            ) : (
-              connectors &&
-              connectors.length > 0 && (
-                <div>
-                  <Title className="mt-8">Current Upgrade Status</Title>
-                  <div className="mt-4">
-                    <div className="italic text-sm mb-2">
-                      Currently in the process of switching to:
-                    </div>
-                    <ModelOption model={newModelSelection} />
-
-                    <Button
-                      color="red"
-                      size="xs"
-                      className="mt-4"
-                      onClick={() => setIsCancelling(true)}
-                    >
-                      Cancel
-                    </Button>
-
-                    <Text className="my-4">
-                      The table below shows the re-indexing progress of all existing
-                      connectors. Once all connectors have been re-indexed
-                      successfully, the new model will be used for all search
-                      queries. Until then, we will use the old model so that no
-                      downtime is necessary during this transition.
-                    </Text>
-
-                    {isLoadingOngoingReIndexingStatus ? (
-                      <ThreeDotsLoader />
-                    ) : ongoingReIndexingStatus ? (
-                      <ReindexingProgressTable
-                        reindexingProgress={ongoingReIndexingStatus}
-                      />
-                    ) : (
-                      <ErrorCallout errorTitle="Failed to fetch re-indexing progress" />
-                    )}
-                  </div>
-                </div>
-              )
-            ))}
-        </>
-        :
-        <>
-          {!showAddConnectorPopup &&
-            (!newModelSelection ? (
-              <div>
-                {currentModel ? (
-                  <>
-                    <Title className="mt-8">Configure Credentials</Title>
-                  </>
-                ) : (
-                  <>
-                    <Title className="mt-8 mb-4">Choose your Embedding Model</Title>
-                  </>
-                )}
-                <div className="gap-4 mt-2 pb-10 flex content-start flex-wrap">
-                  {providers.map((provider, ind) => {
-                    const providerModels = AVAILABLE_CLOUD_MODELS.filter(model => model.provider_id === provider.id);
-                    // const activeModel = activeModels[provider.id] || (providerModels[0]?.model_name ?? '');
-
-                    return (
-                      <div
-                        key={ind}
-                        className="p-4 border border-border rounded-lg shadow-md bg-hover-light w-96 flex flex-col"
-                      >
-                        <div className="font-bold text-neutral-900 text-lg items-center py-1 gap-x-2 flex">
-                          {provider.icon({ size: 30 })}
-                          <p className="my-auto">
-                            {provider.name}
-                          </p>
-                          <button onClick={() => setTentativeNewEmbeddingModel(providerModels[0])} className="cursor-pointer ml-auto">
-                            {!provider.configured && <FaLock />}
-                          </button>
-                        </div>
-                        <div>{provider.description}</div>
-
-
-
-                        <div className="mt-4">
-                          {providerModels.map((model, index) => (
-                            <div
-                              key={index}
-                              className={`p-3 mb-2 border-2  border-neutral-300 border-opacity-40 rounded-md rounded cursor-pointer ${provider.configured ? selectedModel.model_name == model.model_name ? 'bg-teal-50 border border-blue-300' : 'hover:bg-blue-50' : 'hover:bg-rose-50'
-                                }`}
-                              onClick={() => setTentativeNewEmbeddingModel(model)}
-                            >
-                              <div className="flex justify-between">
-                                <div className="font-medium">{model.model_name}</div>
-                                <p className="text-sm flex-none">
-                                  {provider.configured ? model.enabled ? "Selected" : "Unselected" : "Unconfigured"}
-                                </p>
-                              </div>
-                              <div className="text-sm text-gray-600">{model.description}</div>
-                              <div className="text-xs text-gray-500">
-                                Dimensions: {model.model_dim} | Price: ${model.pricePerMillion?.toFixed(3) ?? 'N/A'} per million tokens
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-
-                        <div className="text-sm  flex justify-between mt-1 mx-2">
-                          <a className="hover:underline cursor-pointer">
-                            {provider.configured ? "Swap credentials" : 'Configure credentials'}
-                          </a>
-                          <a className="hover:underline cursor-pointer">
-                            Learn more
-                          </a>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* 
-                <div className="gap-4 mt-2 flex content-start  flex-wrap">
-                  {providers.map((provider, ind) =>
-                    <div
-                      key={ind}
-                      className={
-                        "p-3 border border-border rounded shadow-md bg-hover-light w-96 flex flex-col"
-                      }
-                    >
-                      <div className="font-bold text-neutral-900 text-lg items-center gap-x-2 flex">
-                        {provider.icon({ size: 20 })}
-                        {provider.name}
-                        <button onClick={() => setTentativeNewEmbeddingModel(AVAILABLE_CLOUD_MODELS[0])} className="cursor-pointer ml-auto">
-                          {provider.configured ? <FaConciergeBell /> : "not"}
-                        </button>
-                      </div>
-                      <div>
-                        {provider.description}
-                      </div>
-                      <div className="text-sm hover:underline cursor-pointer mt-1 mx-1">
-                        {provider.configured ? "Swap credentials" : 'Configure credentials'}
-                      </div>
-                    </div>
-                  )}
-                </div> */}
-
-                {/* <Title className="mt-8">Some cloud-based models to choose from!</Title>
-
-                <Text className="mb-4">
-                  They require API keys and run in the cloud of the respective prodivers.
-                </Text>
-
-                <ModelSelector
-                  modelOptions={AVAILABLE_CLOUD_MODELS.filter(
-                    (modelOption) => modelOption.model_name !== currentModelName
-                  )}
-                  setSelectedModel={onSelect}
-                /> */}
-
-
-                {/* <div className="w-full flex">
-                  <Card className="mt-4 2xl:w-4/6 mx-auto">
-                    <CustomModelForm onSubmit={onSelect} />
-                  </Card>
-                </div> */}
-              </div>
-
-
-
-            ) : (
-              connectors &&
-              connectors.length > 0 && (
-                <div>
-                  <Title className="mt-8">Current Upgrade Status</Title>
-                  <div className="mt-4">
-                    <div className="italic text-sm mb-2">
-                      Currently in the process of switching to:
-                    </div>
-                    <ModelOption model={newModelSelection} />
-
-                    <Button
-                      color="red"
-                      size="xs"
-                      className="mt-4"
-                      onClick={() => setIsCancelling(true)}
-                    >
-                      Cancel
-                    </Button>
-
-                    <Text className="my-4">
-                      The table below shows the re-indexing progress of all existing
-                      connectors. Once all connectors have been re-indexed
-                      successfully, the new model will be used for all search
-                      queries. Until then, we will use the old model so that no
-                      downtime is necessary during this transition.
-                    </Text>
-
-                    {isLoadingOngoingReIndexingStatus ? (
-                      <ThreeDotsLoader />
-                    ) : ongoingReIndexingStatus ? (
-                      <ReindexingProgressTable
-                        reindexingProgress={ongoingReIndexingStatus}
-                      />
-                    ) : (
-                      <ErrorCallout errorTitle="Failed to fetch re-indexing progress" />
-                    )}
-                  </div>
-                </div>
-              )
-            ))}
 
         </>
       }

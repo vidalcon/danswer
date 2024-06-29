@@ -182,12 +182,6 @@ function Main() {
     AVAILABLE_MODELS.find((model) => model.model_name === currentModelName) ||
     fillOutEmeddingModelDescriptor(currentEmeddingModel);
 
-  const newModelSelection = futureEmbeddingModel
-    ? AVAILABLE_MODELS.find(
-        (model) => model.model_name === futureEmbeddingModel.model_name
-      ) || fillOutEmeddingModelDescriptor(futureEmbeddingModel)
-    : null;
-
   const onSelectOpenSource = async (model: EmbeddingModelDescriptor) => {
     if (currentEmeddingModel?.model_name === INVALID_OLD_MODEL) {
       await onConfirmSelection(model);

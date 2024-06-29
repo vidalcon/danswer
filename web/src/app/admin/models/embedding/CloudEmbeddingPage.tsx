@@ -10,6 +10,8 @@ import {
 } from "./components/types";
 import { FaLock } from "react-icons/fa";
 import { EmbeddingDetails } from "./page";
+import { FiInfo, FiRadio } from "react-icons/fi";
+import { HoverPopup } from "@/components/HoverPopup";
 
 export default function CloudEmbeddingPage({
   embeddingProviderDetails,
@@ -120,7 +122,7 @@ export default function CloudEmbeddingPage({
               ))}
             </div>
 
-            <div className="text-sm flex justify-between mt-1 mx-2">
+            <div className="text-sm font-semibold flex justify-between mt-1 mx-2">
               <button
                 onClick={() => {
                   if (!provider.configured) {
@@ -129,13 +131,28 @@ export default function CloudEmbeddingPage({
                     setChangeCredentials(provider);
                   }
                 }}
-                className="hover:underline cursor-pointer"
+                className="hover:underline  cursor-pointer"
               >
                 {provider.configured
                   ? "Modify credentials"
                   : "Configure credentials"}
               </button>
-              <a className="hover:underline cursor-pointer">Learn more</a>
+              <a className="my-auto hover:underline cursor-pointer">
+                <HoverPopup
+                  mainContent={<FiInfo className="cusror-pointer" size={20} />}
+                  popupContent={
+                    <div className="text-sm text-neutral-800 w-52 flex">
+                      <div className="flex mx-auto">
+                        <div className="my-auto">{provider.description}</div>
+                      </div>
+                    </div>
+                  }
+                  direction="left-top"
+                  style="dark"
+                />
+              </a>
+
+              {/* <a className="hover:underline cursor-pointer">Learn more</a> */}
             </div>
           </div>
         ))}

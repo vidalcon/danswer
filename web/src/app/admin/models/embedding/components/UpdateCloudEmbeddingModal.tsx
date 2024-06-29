@@ -4,7 +4,7 @@ import { Button, Divider, Text, Callout } from "@tremor/react";
 import { Form, Formik } from "formik";
 import { FiTrash } from "react-icons/fi";
 
-import { EMBEDDING_PROVIDERS_ADMIN_URL } from '../llm/constants';
+import { EMBEDDING_PROVIDERS_ADMIN_URL } from '../../llm/constants';
 import {
     SelectorFormField,
     TextFormField,

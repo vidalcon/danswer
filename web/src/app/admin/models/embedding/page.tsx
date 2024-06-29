@@ -6,10 +6,10 @@ import { errorHandlingFetcher } from "@/lib/fetcher";
 import { Button, Card, Text, Title } from "@tremor/react";
 import { FiPackage } from "react-icons/fi";
 import useSWR, { mutate } from "swr";
-import { ModelOption, ModelSelector } from "./ModelSelector";
+import { ModelOption, ModelSelector } from "./components/ModelSelector";
 import { useState } from "react";
-import { ModelSelectionConfirmationModal, ProviderCreationModal } from "./ModelSelectionConfirmation";
-import { ReindexingProgressTable } from "./ReindexingProgressTable";
+import { ModelSelectionConfirmationModal, ProviderCreationModal } from "./components/ModelSelectionConfirmation";
+import { ReindexingProgressTable } from "./components/ReindexingProgressTable";
 import { Modal } from "@/components/Modal";
 import {
   CloudEmbeddingProvider,
@@ -20,13 +20,15 @@ import {
   checkModelNameIsValid,
   fillOutEmeddingModelDescriptor,
   EmbeddingModelDescriptor
-} from "./embeddingModels";
+} from "./components/embeddingModels";
 import { ErrorCallout } from "@/components/ErrorCallout";
 import { Connector, ConnectorIndexingStatus } from "@/lib/types";
 import Link from "next/link";
-import { CustomModelForm } from "./CustomModelForm";
+import { CustomModelForm } from "./components/CustomModelForm";
 import { FaLock } from "react-icons/fa";
-import { ChangeCredentialsModal, ChangeModelModal, DeleteCredentialsModal, ModelNotConfiguredModal, SelectModelModal } from "./Providers";
+import { ChangeCredentialsModal, ChangeModelModal, DeleteCredentialsModal, ModelNotConfiguredModal, SelectModelModal } from "./components/Providers";
+import OpenSourceEmbeddingSelectionPage from "./OpenSourceEmbeddingSelectionPage";
+import CloudEmbeddingPage from "./CloudEmbeddingPage";
 
 function Main() {
   const [openToggle, setOpenToggle] = useState(true);
@@ -38,6 +40,7 @@ function Main() {
   const [changeCredentials, setChangeCredentials] = useState<CloudEmbeddingProvider | null>(null);
   const [tentativeNewCloudEmbeddingModel, setTentativeNewCloudEmbeddingModel] = useState<CloudEmbeddingModel | null>(null);
   const [tentativeNewEmbeddingModel, setTentativeNewEmbeddingModel] = useState<CloudEmbeddingModel | null>(null);
+  const [tentativeNewOpenmbeddingModel, setTentativeNewOpenmbeddingModel] = useState<EmbeddingModelDescriptor | null>(null);
   const [isCancelling, setIsCancelling] = useState<boolean>(false);
   const [showAddConnectorPopup, setShowAddConnectorPopup] = useState<boolean>(false);
 
@@ -112,13 +115,13 @@ function Main() {
   // );
 
 
-  const onSelect = async (model: CloudEmbeddingModel) => {
-    if (currentEmeddingModel?.name === INVALID_OLD_MODEL) {
-      await onConfirm(model);
-    } else {
-      setTentativeNewEmbeddingModel(model);
-    }
-  };
+  // const onSelect = async (model: CloudEmbeddingModel) => {
+  //   if (currentEmeddingModel?.name === INVALID_OLD_MODEL) {
+  //     await onConfirm(model);
+  //   } else {
+  //     setTentativeNewEmbeddingModel(model);
+  //   }
+  // };
 
   const onConfirm = async (model: CloudEmbeddingModel) => {
     const response = await fetch(
@@ -209,7 +212,7 @@ function Main() {
     if (currentEmeddingModel?.model_name === INVALID_OLD_MODEL) {
       await onConfirmSelection(model);
     } else {
-      setTentativeNewEmbeddingModel(model);
+      setTentativeNewOpenmbeddingModel(model);
     }
   };
 
@@ -285,6 +288,12 @@ function Main() {
 
       {currentModel ? (
         <>
+          <Title className="mt-8 mb-2">Current Embedding Model</Title>
+          <Text>
+            <ModelOption model={currentModel} />
+          </Text>
+
+
           <Title className="mt-8">Switch your Embedding Model</Title>
           <Text className="mb-4">
             If the current model is not working for you, you can update
@@ -296,10 +305,6 @@ function Main() {
             re-indexing on this page.
           </Text>
 
-          <Title className="mt-8 mb-2">Current Embedding Model</Title>
-          <Text>
-            <ModelOption model={currentModel} />
-          </Text>
         </>
       ) : (
         <Title className="mt-8 mb-4">Choose your Embedding Model</Title>
@@ -316,134 +321,21 @@ function Main() {
 
       {!showAddConnectorPopup && !futureEmbeddingModel && (
         openToggle ? (
-          <div>
-            {/* <ModelSelector
-              modelOptions={AVAILABLE_CLOUD_MODELS.flatMap(provider => provider.models).filter(
-                (modelOption) => modelOption.name !== currentModelName
-              )}
-              setSelectedModel={onSelect}
-            /> */}
-            <ModelSelector
-              modelOptions={AVAILABLE_MODELS.filter(
-                (modelOption) => modelOption.model_name !== currentModelName
-              )}
-              setSelectedModel={onSelectOpenSource}
-            />
 
-
-            <Title className="mt-8">Alternatively, here are some cloud-based models to choose from!</Title>
-            <Text className="mb-4">
-              They require API keys and run in the cloud of the respective providers.
-            </Text>
-
-            <Text className="mt-6">
-              Alternatively, (if you know what you&apos;re doing) you can
-              specify a{" "}
-              <a
-                target="_blank"
-                href="https://www.sbert.net/"
-                className="text-link"
-              >
-                SentenceTransformers
-              </a>
-              -compatible model of your choice below. The rough list of
-              supported models can be found{" "}
-              <a
-                target="_blank"
-                href="https://huggingface.co/models?library=sentence-transformers&sort=trending"
-                className="text-link"
-              >
-                here
-              </a>
-              .
-              <br />
-              <b>NOTE:</b> not all models listed will work with Danswer, since
-              some have unique interfaces or special requirements. If in doubt,
-              reach out to the Danswer team.
-            </Text>
-
-            <div className="w-full flex">
-              <Card className="mt-4 2xl:w-4/6 mx-auto">
-                <CustomModelForm onSubmit={onSelect} />
-              </Card>
-            </div>
-          </div>
+          <OpenSourceEmbeddingSelectionPage onSelectOpenSource={onSelectOpenSource} currentModelName={currentModelName} />
         ) : (
-          <div>
-            <Title className="mt-8">Configure Credentials</Title>
-            <div className="gap-4 mt-2 pb-10 flex content-start flex-wrap">
-              {AVAILABLE_CLOUD_MODELS.map((provider, ind) => (
-                <div
-                  key={ind}
-                  className="p-4 border border-border rounded-lg shadow-md bg-hover-light w-96 flex flex-col"
-                >
-                  <div className="font-bold text-neutral-900 text-lg items-center py-1 gap-x-2 flex">
-                    {provider.icon({ size: 40 })}
-                    <p className="my-auto">
-                      {provider.name}
-                    </p>
-                    <button onClick={() => setTenativelyNewProvider(provider)} className="cursor-pointer ml-auto">
-                      {!provider.configured && <FaLock />}
-                    </button>
-                  </div>
-                  <div>{provider.description}</div>
+          <CloudEmbeddingPage
+            setTentativeNewEmbeddingModel={setTentativeNewEmbeddingModel}
+            setTenativelyNewProvider={setTenativelyNewProvider}
+            selectedModel={selectedModel}
+            setShowModelNotConfiguredModal={setShowModelNotConfiguredModal}
+            setChangeCredentials={setChangeCredentials}
 
-                  <div className="mt-4">
-                    {provider.models.map((model, index) => (
-                      <div
-                        key={index}
-                        className={`p-3 mb-2 border-2 border-neutral-300 border-opacity-40 rounded-md rounded cursor-pointer ${provider.configured
-                          ? selectedModel.name === model.name
-                            ? 'bg-teal-50 border border-blue-300'
-                            : 'hover:bg-blue-50'
-                          : 'hover:bg-rose-50'
-                          }`}
-                        onClick={() => {
-                          if (model.name === "") {
-                            return;
-                          } else if (provider.configured) {
-                            setTentativeNewEmbeddingModel(model);
-                          } else {
-                            setShowModelNotConfiguredModal(provider);
-                          }
-                        }}
-                      >
-                        <div className="flex justify-between">
-                          <div className="font-medium">{model.name}</div>
-                          <p className="text-sm flex-none">
-                            {provider.configured ? model.is_configured ? "Selected" : "Unselected" : "Unconfigured"}
-                          </p>
-                        </div>
-                        <div className="text-sm text-gray-600">{model.description}</div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="text-sm flex justify-between mt-1 mx-2">
-                    <button
-                      onClick={() => {
-                        if (provider.configured) {
-                          setChangeCredentials(provider);
-                        } else {
-                          setShowModelNotConfiguredModal(provider);
-                        }
-                      }}
-                      className="hover:underline cursor-pointer"
-                    >
-                      {provider.configured ? "Swap credentials" : 'Configure credentials'}
-                    </button>
-                    <a className="hover:underline cursor-pointer">
-                      Learn more
-                    </a>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          />
         )
       )}
 
-      {tentativeNewEmbeddingModel && (
+      {/* {tentativeNewEmbeddingModel && (
         <ModelSelectionConfirmationModal
           selectedModel={tentativeNewEmbeddingModel}
           isCustom={!AVAILABLE_CLOUD_MODELS.flatMap(provider => provider.models).some(
@@ -452,7 +344,7 @@ function Main() {
           onConfirm={() => onConfirm(tentativeNewEmbeddingModel)}
           onCancel={() => setTentativeNewEmbeddingModel(null)}
         />
-      )}
+      )} */}
 
       {tenativelyNewProvider && (
         <ProviderCreationModal
@@ -525,7 +417,7 @@ function Main() {
             <div className="italic text-sm mb-2">
               Currently in the process of switching to:
             </div>
-            <ModelOption model={futureEmbeddingModel} />
+            {/* <ModelOption model={futureEmbeddingModel} /> */}
 
             <Button
               color="red"
@@ -615,11 +507,11 @@ export default Page;
 
 
 //   const [tentativeNewCloudEmbeddingModel, setTentativeNewCloudEmbeddingModel] =
-//     useState<FullCloudbasedEmbeddingModelDescriptor | null>(null);
+//     useState<FullCloudbasedChangeModelModal | null>(null);
 
 
 //   const [tentativeNewEmbeddingModel, setTentativeNewEmbeddingModel] =
-//     useState<FullEmbeddingModelDescriptor | null>(null);
+//     useState<FullChangeModelModal | null>(null);
 
 
 
@@ -631,7 +523,7 @@ export default Page;
 //     data: currentEmeddingModel,
 //     isLoading: isLoadingCurrentModel,
 //     error: currentEmeddingModelError,
-//   } = useSWR<EmbeddingModelDescriptor>(
+//   } = useSWR<<ChangeModelModal>(
 //     "/api/secondary-index/get-current-embedding-model",
 //     errorHandlingFetcher,
 //     { refreshInterval: 5000 } // 5 seconds
@@ -640,7 +532,7 @@ export default Page;
 //     data: futureEmbeddingModel,
 //     isLoading: isLoadingFutureModel,
 //     error: futureEmeddingModelError,
-//   } = useSWR<EmbeddingModelDescriptor | null>(
+//   } = useSWR<<ChangeModelModal | null>(
 //     "/api/secondary-index/get-secondary-embedding-model",
 //     errorHandlingFetcher,
 //     { refreshInterval: 5000 } // 5 seconds
@@ -659,7 +551,7 @@ export default Page;
 //     { refreshInterval: 5000 } // 5 seconds
 //   );
 
-//   const onSelect = async (model: FullEmbeddingModelDescriptor) => {
+//   const onSelect = async (model: Full<ChangeModelModal) => {
 //     if (currentEmeddingModel?.model_name === INVALID_OLD_MODEL) {
 //       await onConfirm(model);
 //     } else {
@@ -668,7 +560,7 @@ export default Page;
 //   };
 
 
-//   const onConfirm = async (model: FullEmbeddingModelDescriptor) => {
+//   const onConfirm = async (model: Full<ChangeModelModal) => {
 //     const response = await fetch(
 //       "/api/secondary-index/set-new-embedding-model",
 //       {
@@ -772,7 +664,7 @@ export default Page;
 //       )}
 
 
-//       {/* FullEmbeddingModelDescriptor */}
+//       {/* Full<ChangeModelModal */}
 //       {showSelectModelModal && tentativeNewCloudEmbeddingModel && (
 //         <SelectModelModal
 //           model={tentativeNewCloudEmbeddingModel}
@@ -918,7 +810,7 @@ export default Page;
 
 //                 <div className="w-full flex">
 //                   <Card className="mt-4 2xl:w-4/6 mx-auto">
-//                     <CustomModelForm onSubmit={onSelect} />
+//                     <CustomModelForm  ={onSelect} />
 //                   </Card>
 //                 </div>
 //               </div>

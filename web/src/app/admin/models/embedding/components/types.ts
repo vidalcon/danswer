@@ -42,8 +42,6 @@ export interface CloudEmbeddingProvider {
   default_model?: CloudEmbeddingModel;
 }
 
-
-
 export interface EmbeddingModelResponse {
   model_name?: string | null;
 }

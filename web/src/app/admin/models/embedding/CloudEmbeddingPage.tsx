@@ -1,41 +1,22 @@
 "use client";
 
-import { ThreeDotsLoader } from "@/components/Loading";
-import { AdminPageTitle } from "@/components/admin/Title";
-import { errorHandlingFetcher } from "@/lib/fetcher";
-import { Button, Card, Text, Title } from "@tremor/react";
-import { FiPackage } from "react-icons/fi";
-import useSWR, { mutate } from "swr";
-import { ModelOption, ModelSelector } from "./components/ModelSelector";
-import { useState } from "react";
-import { ModelSelectionConfirmationModal, ProviderCreationModal } from "./components/ModelSelectionConfirmation";
-import { ReindexingProgressTable } from "./components/ReindexingProgressTable";
-import { Modal } from "@/components/Modal";
+
+import { Title } from "@tremor/react";
+
 import {
     CloudEmbeddingProvider,
     CloudEmbeddingModel,
     AVAILABLE_CLOUD_MODELS,
-    AVAILABLE_MODELS,
-    INVALID_OLD_MODEL,
-    checkModelNameIsValid,
-    fillOutEmeddingModelDescriptor,
-    EmbeddingModelDescriptor,
     CloudEmbeddingProviderFull
-} from "./components/embeddingModels";
-import { ErrorCallout } from "@/components/ErrorCallout";
-import { Connector, ConnectorIndexingStatus } from "@/lib/types";
-import Link from "next/link";
-import { CustomModelForm } from "./components/CustomModelForm";
+} from "./components/types";
 import { FaLock } from "react-icons/fa";
-import { ChangeCredentialsModal, ChangeModelModal, DeleteCredentialsModal, ModelNotConfiguredModal, SelectModelModal } from "./components/Providers";
-import OpenSourceEmbeddingSelectionPage from "./OpenSourceEmbeddingSelectionPage";
 
 
-export default function CloudEmbeddingPage({ newEnabledProviders, setTentativeNewEmbeddingModel, setTenativelyNewProvider, selectedModel, setShowModelNotConfiguredModal, setChangeCredentials }: {
+export default function CloudEmbeddingPage({ newEnabledProviders, setTentativeNewEmbeddingModel, setTentativelyNewProvider, selectedModel, setShowModelNotConfiguredModal, setChangeCredentials }: {
     newEnabledProviders: string[],
-    setTentativeNewEmbeddingModel: React.Dispatch<React.SetStateAction<CloudEmbeddingModel | null>>,
-    setTenativelyNewProvider: React.Dispatch<React.SetStateAction<CloudEmbeddingProvider | null>>,
     selectedModel: CloudEmbeddingProvider,
+    setTentativeNewEmbeddingModel: React.Dispatch<React.SetStateAction<CloudEmbeddingModel | null>>,
+    setTentativelyNewProvider: React.Dispatch<React.SetStateAction<CloudEmbeddingProvider | null>>,
     setShowModelNotConfiguredModal: React.Dispatch<React.SetStateAction<CloudEmbeddingProvider | null>>,
     setChangeCredentials: React.Dispatch<React.SetStateAction<CloudEmbeddingProvider | null>>
 }) {
@@ -62,7 +43,7 @@ export default function CloudEmbeddingPage({ newEnabledProviders, setTentativeNe
                         </p>
                         <button onClick={() => {
                             console.log(provider)
-                            setTenativelyNewProvider(provider)
+                            setTentativelyNewProvider(provider)
                         }} className="cursor-pointer ml-auto">
                             {!provider.configured && <FaLock />}
                         </button>
@@ -80,7 +61,6 @@ export default function CloudEmbeddingPage({ newEnabledProviders, setTentativeNe
                                     : 'hover:bg-rose-50'
                                     }`}
                                 onClick={() => {
-
                                     if (!provider.configured) {
                                         setShowModelNotConfiguredModal(provider);
                                     } else {
@@ -103,10 +83,8 @@ export default function CloudEmbeddingPage({ newEnabledProviders, setTentativeNe
                         <button
                             onClick={() => {
                                 if (!provider.configured) {
-                                    setTenativelyNewProvider(provider)
-                                    // setShowModelNotConfiguredModal(provider);
+                                    setTentativelyNewProvider(provider)
                                 } else {
-
                                     setChangeCredentials(provider);
                                 }
                             }}

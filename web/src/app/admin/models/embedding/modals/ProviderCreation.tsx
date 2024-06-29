@@ -1,12 +1,11 @@
 import React, { useState } from 'react';
 import { Text, Button, Callout } from "@tremor/react";
-import { Formik, Form, Field, FieldArray, ArrayHelpers } from 'formik';
+import { Formik, Form, Field } from 'formik';
 import * as Yup from 'yup';
-import { FiPlus, FiTrash } from "react-icons/fi";
-import { Label, SubLabel } from "@/components/admin/connectors/Field";
+import { Label } from "@/components/admin/connectors/Field";
 import { LoadingAnimation } from "@/components/Loading";
-import { CloudEmbeddingProvider } from './components/embeddingModels';
-import { EMBEDDING_PROVIDERS_ADMIN_URL } from '../llm/constants';
+import { CloudEmbeddingProvider } from '../components/types';
+import { EMBEDDING_PROVIDERS_ADMIN_URL } from '../../llm/constants';
 import { Modal } from '@/components/Modal';
 
 export function ProviderCreation({
@@ -18,7 +17,7 @@ export function ProviderCreation({
     onConfirm: () => void;
     existingProvider?: CloudEmbeddingProvider;
 }) {
-    const [successfulCredentialUpdate, setSuccessfulCredentialUpdate] = useState(false)
+
     const [isTesting, setIsTesting] = useState(false);
     const [testError, setTestError] = useState<string>("");
 
@@ -135,7 +134,7 @@ export function ProviderCreation({
 
                     <Button type="submit" color="blue" className="w-full" disabled={isSubmitting}>
                         {isTesting ? <LoadingAnimation /> : (existingProvider ? "Update" : "Create")}
-                    </Button> 
+                    </Button>
                 </Form>
             )}
         </Formik>

@@ -72,6 +72,8 @@ def upsert_llm_provider(
 
     return FullLLMProvider.from_model(llm_provider_model)
 
+def fetch_existing_embedding_providers(db_session: Session) -> list[CloudEmbeddingProvider]:
+    return list(db_session.scalars(select(CloudEmbeddingProvider)).all())
 
 def fetch_existing_llm_providers(db_session: Session) -> list[LLMProviderModel]:
     return list(db_session.scalars(select(LLMProviderModel)).all())

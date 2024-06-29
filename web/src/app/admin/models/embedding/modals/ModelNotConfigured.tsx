@@ -16,7 +16,7 @@ export function ModelNotConfiguredModal({
     onCancel: () => void;
 }) {
     return (
-        <Modal title={`${modelProvider.name} Configuration Required`} onOutsideClick={onCancel}>
+        <Modal icon={modelProvider.icon} title={`${modelProvider.name} Configuration Required`} onOutsideClick={onCancel}>
             <div className="mb-4">
                 <Text className="text-lg mb-2">
                     Heads up: {modelProvider.name} isn&apos;t configured yet. Want to unleash its potential now?

@@ -9,6 +9,7 @@ from danswer.auth.users import current_admin_user
 from danswer.auth.users import current_user
 from danswer.db.engine import get_session
 from danswer.db.llm import fetch_existing_llm_providers
+from danswer.db.llm import fetch_existing_embedding_providers
 from danswer.db.llm import remove_llm_provider
 from danswer.db.llm import update_default_provider
 from danswer.db.llm import upsert_llm_provider
@@ -25,6 +26,8 @@ from danswer.llm.llm_provider_options import fetch_available_well_known_llms
 from danswer.llm.llm_provider_options import WellKnownLLMProviderDescriptor
 from danswer.llm.utils import test_llm
 from danswer.server.manage.llm.models import FullLLMProvider
+from danswer.server.manage.llm.models import FullCloudEmbeddingProvider
+
 
 from danswer.server.manage.llm.models import LLMProviderDescriptor
 from danswer.server.manage.llm.models import LLMProviderUpsertRequest
@@ -45,13 +48,6 @@ admin_router = APIRouter(prefix="/admin/llm")
 basic_router = APIRouter(prefix="/llm")
 
 
-@admin_router.get("/built-in/options")
-def fetch_llm_options(
-    _: User | None = Depends(current_admin_user),
-) -> list[WellKnownLLMProviderDescriptor]:
-    return fetch_available_well_known_llms()
-
-
 @admin_router.post("/test-embedding")
 def test_embedding_configuration(
     test_llm_request: TestEmbeddingRequest,
@@ -69,7 +65,9 @@ def test_embedding_configuration(
         logger.error(
             f"An error occurred while testing embedding: {str(e)}", exc_info=True
         )
-        raise HTTPException(status_code=500, detail=f"An unexpected error occurred- {e}")
+        raise HTTPException(
+            status_code=500, detail=f"An unexpected error occurred- {e}"
+        )
 
 
 @admin_router.post("/test")
@@ -149,6 +147,18 @@ def list_llm_providers(
     ]
 
 
+@admin_router.get("/embedding-provider")
+def list_embedding_providers(
+    _: User | None = Depends(current_admin_user),
+    db_session: Session = Depends(get_session),
+) -> list[FullCloudEmbeddingProvider]:
+
+    return [
+        FullCloudEmbeddingProvider.from_request(embedding_provider_model)
+        for embedding_provider_model in fetch_existing_embedding_providers(db_session)
+    ]
+
+
 @admin_router.put("/provider")
 def put_llm_provider(
     llm_provider: LLMProviderUpsertRequest,
@@ -189,6 +199,12 @@ def list_llm_provider_basics(
         LLMProviderDescriptor.from_model(llm_provider_model)
         for llm_provider_model in fetch_existing_llm_providers(db_session)
     ]
+
+@admin_router.get("/built-in/options")
+def fetch_llm_options(
+    _: User | None = Depends(current_admin_user),
+) -> list[WellKnownLLMProviderDescriptor]:
+    return fetch_available_well_known_llms()
 
 
 @basic_router.get("/embedding-provider")

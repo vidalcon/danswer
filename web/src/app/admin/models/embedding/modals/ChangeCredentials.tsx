@@ -19,7 +19,7 @@ export function ChangeCredentialsModal({
     const [apiKey, setApiKey] = useState('');
 
     return (
-        <Modal title={`Swap Keys for ${provider.name}`} onOutsideClick={onCancel}>
+        <Modal icon={provider.icon} title={`Swap Keys for ${provider.name}`} onOutsideClick={onCancel}>
             <div className="mb-4">
                 <Text className="text-lg mb-2">
                     Ready to play key swap with {provider.name}? Your old key is about to hit the bit bucket.

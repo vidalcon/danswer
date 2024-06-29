@@ -21,17 +21,18 @@ export function SelectModelModal({
           You&apos;re about to supercharge your setup with {model.name}.
           <br />
           Ready to push the envelope?
+
         </Text>
         <Callout title="Model Specs" color="blue" className="mt-4">
           <div className="flex flex-col gap-y-2">
-            <p>TL;DR: {model.description}</p>
-            <p>Dimensions: {model.model_dim} (That&apos;s {model.model_dim > 1000 ? 'beefy' : 'lean'})</p>
-            <p>Damage to your wallet: ${model.pricePerMillion}/million tokens (Estimated monthly burn rate: $50-$500)</p>
+            <p>{model.description}</p>
+            <p>Dimensions: {model.model_dim} </p>
+            <p>Pricing: ${model.pricePerMillion}/million tokens </p>
           </div>
         </Callout>
         <div className="flex mt-8 justify-between">
-          <Button color="gray" onClick={onCancel}>Abort Mission</Button>
-          <Button color="green" onClick={onConfirm}>Ship It</Button>
+          <Button color="gray" onClick={onCancel}>Exit</Button>
+          <Button color="green" onClick={onConfirm}>Switch</Button>
         </div>
       </div>
     </Modal>

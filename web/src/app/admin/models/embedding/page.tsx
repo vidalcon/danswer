@@ -32,6 +32,14 @@ import { ChangeModelModal } from "./modals/ChangeModel";
 import { SelectModelModal } from "./modals/SelectModel";
 import { ChangeCredentialsModal } from "./modals/ChangeCredentials";
 import { ModelSelectionConfirmationModal } from "./modals/ModelSelection";
+import { EMBEDDING_PROVIDERS_ADMIN_URL } from "../llm/constants";
+
+export interface EmbeddingDetails {
+  api_key: string,
+  custom_config: any,
+  default_model_id?: number,
+  nmae: string
+}
 
 
 function Main() {
@@ -57,6 +65,13 @@ function Main() {
     "/api/secondary-index/get-current-embedding-model",
     errorHandlingFetcher,
     { refreshInterval: 5000 } // 5 seconds
+  );
+
+
+
+  const { data: embeddingProviderDetails } = useSWR<EmbeddingDetails[]>(
+    EMBEDDING_PROVIDERS_ADMIN_URL,
+    errorHandlingFetcher
   );
 
 
@@ -316,6 +331,7 @@ function Main() {
           <OpenSourceEmbeddingSelectionPage onSelectOpenSource={onSelectOpenSource} currentModelName={currentModelName} />
         ) : (
           <CloudEmbeddingPage
+            embeddingProviderDetails={embeddingProviderDetails}
             newEnabledProviders={newEnabledProviders}
             setTentativeNewEmbeddingModel={setTentativeNewCloudEmbeddingModel}
             setTentativelyNewProvider={setTentativelyNewProvider}

@@ -10,9 +10,11 @@ import {
     CloudEmbeddingProviderFull
 } from "./components/types";
 import { FaLock } from "react-icons/fa";
+import { EmbeddingDetails } from "./page";
 
 
-export default function CloudEmbeddingPage({ newEnabledProviders, setTentativeNewEmbeddingModel, setTentativelyNewProvider, selectedModel, setShowModelNotConfiguredModal, setChangeCredentials }: {
+export default function CloudEmbeddingPage({ embeddingProviderDetails, newEnabledProviders, setTentativeNewEmbeddingModel, setTentativelyNewProvider, selectedModel, setShowModelNotConfiguredModal, setChangeCredentials }: {
+    embeddingProviderDetails?: EmbeddingDetails[]
     newEnabledProviders: string[],
     selectedModel: CloudEmbeddingProvider,
     setTentativeNewEmbeddingModel: React.Dispatch<React.SetStateAction<CloudEmbeddingModel | null>>,
@@ -21,9 +23,13 @@ export default function CloudEmbeddingPage({ newEnabledProviders, setTentativeNe
     setChangeCredentials: React.Dispatch<React.SetStateAction<CloudEmbeddingProvider | null>>
 }) {
 
+    function hasNameInArray(arr: Array<{ name: string }>, searchName: string): boolean {
+        return arr.some(item => item.name.toLowerCase() === searchName.toLowerCase());
+    }
+
     let providers: CloudEmbeddingProviderFull[] = []
     AVAILABLE_CLOUD_MODELS.forEach((model, ind) => {
-        let temporary_model: CloudEmbeddingProviderFull = { ...model, "configured": newEnabledProviders.includes(model.name) }
+        let temporary_model: CloudEmbeddingProviderFull = { ...model, "configured": newEnabledProviders.includes(model.name) || hasNameInArray(AVAILABLE_CLOUD_MODELS, model.name) }
         providers.push(temporary_model)
 
     })
@@ -90,7 +96,7 @@ export default function CloudEmbeddingPage({ newEnabledProviders, setTentativeNe
                             }}
                             className="hover:underline cursor-pointer"
                         >
-                            {provider.configured ? "Swap credentials" : 'Configure credentials'}
+                            {provider.configured ? "Change credentials" : 'Configure credentials'}
                         </button>
                         <a className="hover:underline cursor-pointer">
                             Learn more

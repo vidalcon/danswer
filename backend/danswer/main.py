@@ -354,10 +354,20 @@ def get_application() -> FastAPI:
     )
 
     application.add_exception_handler(ValueError, value_error_handler)
-
+    
+    origins = [
+    "http://localhost.tiangolo.com",
+    "https://localhost.tiangolo.com",
+    "http://localhost",
+    "http://localhost:8080",
+    "*",
+    "https://gpt.dil.in",
+    "https://privategpt.in",
+]
+    
     application.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # Change this to the list of allowed origins if needed
+        allow_origins=origins,  # Change this to the list of allowed origins if needed
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

@@ -6,8 +6,13 @@ from typing import TypeVar
 
 from dateutil.parser import parse
 
+from danswer.configs.constants import IGNORE_FOR_QA
 from danswer.connectors.models import BasicExpertInfo
 from danswer.utils.text_processing import is_valid_email
+
+
+T = TypeVar("T")
+U = TypeVar("U")
 
 
 def datetime_to_utc(dt: datetime) -> datetime:
@@ -18,7 +23,16 @@ def datetime_to_utc(dt: datetime) -> datetime:
 
 
 def time_str_to_utc(datetime_str: str) -> datetime:
-    dt = parse(datetime_str)
+    try:
+        dt = parse(datetime_str)
+    except ValueError:
+        # Handle malformed timezone by attempting to fix common format issues
+        if "0000" in datetime_str:
+            # Convert "0000" to "+0000" for proper timezone parsing
+            fixed_dt_str = datetime_str.replace(" 0000", " +0000")
+            dt = parse(fixed_dt_str)
+        else:
+            raise
     return datetime_to_utc(dt)
 
 
@@ -48,12 +62,12 @@ def get_experts_stores_representations(
     return [owner for owner in reps if owner is not None]
 
 
-T = TypeVar("T")
-U = TypeVar("U")
-
-
 def process_in_batches(
     objects: list[T], process_function: Callable[[T], U], batch_size: int
 ) -> Iterator[list[U]]:
     for i in range(0, len(objects), batch_size):
         yield [process_function(obj) for obj in objects[i : i + batch_size]]
+
+
+def get_metadata_keys_to_ignore() -> list[str]:
+    return [IGNORE_FOR_QA]

@@ -1,14 +1,11 @@
 import math
 import re
-from collections.abc import Callable
 from collections.abc import Generator
-from collections.abc import Iterator
 from json import JSONDecodeError
 from typing import Optional
 
 import regex
 
-from danswer.chat.models import AnswerQuestionStreamReturn
 from danswer.chat.models import DanswerAnswer
 from danswer.chat.models import DanswerAnswerPiece
 from danswer.chat.models import DanswerQuote
@@ -17,7 +14,6 @@ from danswer.chat.models import LlmDoc
 from danswer.configs.chat_configs import QUOTE_ALLOWED_ERROR_PERCENT
 from danswer.prompts.constants import ANSWER_PAT
 from danswer.prompts.constants import QUOTE_PAT
-from danswer.prompts.constants import UNCERTAINTY_PAT
 from danswer.search.models import InferenceChunk
 from danswer.utils.logger import setup_logger
 from danswer.utils.text_processing import clean_model_quote
@@ -27,6 +23,7 @@ from danswer.utils.text_processing import shared_precompare_cleanup
 
 
 logger = setup_logger()
+answer_pattern = re.compile(r'{\s*"answer"\s*:\s*"', re.IGNORECASE)
 
 
 def _extract_answer_quotes_freeform(
@@ -157,7 +154,7 @@ def separate_answer_quotes(
     return _extract_answer_quotes_freeform(clean_up_code_blocks(answer_raw))
 
 
-def process_answer(
+def _process_answer(
     answer_raw: str,
     docs: list[LlmDoc],
     is_json_prompt: bool = True,
@@ -166,18 +163,15 @@ def process_answer(
     into an Answer and Quotes AND (2) after the complete streaming response
     has been received to process the model output into an Answer and Quotes."""
     answer, quote_strings = separate_answer_quotes(answer_raw, is_json_prompt)
-    if answer == UNCERTAINTY_PAT or not answer:
-        if answer == UNCERTAINTY_PAT:
-            logger.debug("Answer matched UNCERTAINTY_PAT")
-        else:
-            logger.debug("No answer extracted from raw output")
+    if not answer:
+        logger.debug("No answer extracted from raw output")
         return DanswerAnswer(answer=None), DanswerQuotes(quotes=[])
 
-    logger.info(f"Answer: {answer}")
+    logger.notice(f"Answer: {answer}")
     if not quote_strings:
         logger.debug("No quotes extracted from raw output")
         return DanswerAnswer(answer=answer), DanswerQuotes(quotes=[])
-    logger.info(f"All quotes (including unmatched): {quote_strings}")
+    logger.debug(f"All quotes (including unmatched): {quote_strings}")
     quotes = match_quotes_to_docs(quote_strings, docs)
     logger.debug(f"Final quotes: {quotes}")
 
@@ -198,96 +192,110 @@ def _stream_json_answer_end(answer_so_far: str, next_token: str) -> bool:
 def _extract_quotes_from_completed_token_stream(
     model_output: str, context_docs: list[LlmDoc], is_json_prompt: bool = True
 ) -> DanswerQuotes:
-    answer, quotes = process_answer(model_output, context_docs, is_json_prompt)
+    answer, quotes = _process_answer(model_output, context_docs, is_json_prompt)
     if answer:
-        logger.info(answer)
+        logger.notice(answer)
     elif model_output:
         logger.warning("Answer extraction from model output failed.")
 
     return quotes
 
 
-def process_model_tokens(
-    tokens: Iterator[str],
-    context_docs: list[LlmDoc],
-    is_json_prompt: bool = True,
-) -> Generator[DanswerAnswerPiece | DanswerQuotes, None, None]:
-    """Used in the streaming case to process the model output
-    into an Answer and Quotes
+class QuotesProcessor:
+    def __init__(
+        self,
+        context_docs: list[LlmDoc],
+        is_json_prompt: bool = True,
+    ):
+        self.context_docs = context_docs
+        self.is_json_prompt = is_json_prompt
 
-    Yields Answer tokens back out in a dict for streaming to frontend
-    When Answer section ends, yields dict with answer_finished key
-    Collects all the tokens at the end to form the complete model output"""
-    quote_pat = f"\n{QUOTE_PAT}"
-    # Sometimes worse model outputs new line instead of :
-    quote_loose = f"\n{quote_pat[:-1]}\n"
-    # Sometime model outputs two newlines before quote section
-    quote_pat_full = f"\n{quote_pat}"
-    model_output: str = ""
-    found_answer_start = False if is_json_prompt else True
-    found_answer_end = False
-    hold_quote = ""
-    for token in tokens:
-        model_previous = model_output
-        model_output += token
+        self.found_answer_start = False if is_json_prompt else True
+        self.found_answer_end = False
+        self.hold_quote = ""
+        self.model_output = ""
+        self.hold = ""
 
-        if not found_answer_start and '{"answer":"' in re.sub(r"\s", "", model_output):
-            # Note, if the token that completes the pattern has additional text, for example if the token is "?
-            # Then the chars after " will not be streamed, but this is ok as it prevents streaming the ? in the
-            # event that the model outputs the UNCERTAINTY_PAT
-            found_answer_start = True
+    def process_token(
+        self, token: str | None
+    ) -> Generator[DanswerAnswerPiece | DanswerQuotes, None, None]:
+        # None -> end of stream
+        if token is None:
+            if self.model_output:
+                yield _extract_quotes_from_completed_token_stream(
+                    model_output=self.model_output,
+                    context_docs=self.context_docs,
+                    is_json_prompt=self.is_json_prompt,
+                )
+            return
 
-            # Prevent heavy cases of hallucinations where model is not even providing a json until later
-            if is_json_prompt and len(model_output) > 40:
-                logger.warning("LLM did not produce json as prompted")
-                found_answer_end = True
+        model_previous = self.model_output
+        self.model_output += token
 
-            continue
+        if not self.found_answer_start:
+            m = answer_pattern.search(self.model_output)
+            if m:
+                self.found_answer_start = True
 
-        if found_answer_start and not found_answer_end:
-            if is_json_prompt and _stream_json_answer_end(model_previous, token):
-                found_answer_end = True
+                # Prevent heavy cases of hallucinations
+                if self.is_json_prompt and len(self.model_output) > 70:
+                    logger.warning("LLM did not produce json as prompted")
+                    self.found_answer_end = True
+                    return
 
-                # return the remaining part of the answer e.g. token might be 'd.", ' and we should yield 'd.'
+                remaining = self.model_output[m.end() :]
+
+                # Look for an unescaped quote, which means the answer is entirely contained
+                # in this token e.g. if the token is `{"answer": "blah", "qu`
+                quote_indices = [i for i, char in enumerate(remaining) if char == '"']
+                for quote_idx in quote_indices:
+                    # Check if quote is escaped by counting backslashes before it
+                    num_backslashes = 0
+                    pos = quote_idx - 1
+                    while pos >= 0 and remaining[pos] == "\\":
+                        num_backslashes += 1
+                        pos -= 1
+                    # If even number of backslashes, quote is not escaped
+                    if num_backslashes % 2 == 0:
+                        yield DanswerAnswerPiece(answer_piece=remaining[:quote_idx])
+                        return
+
+                # If no unescaped quote found, yield the remaining string
+                if len(remaining) > 0:
+                    yield DanswerAnswerPiece(answer_piece=remaining)
+                return
+
+        if self.found_answer_start and not self.found_answer_end:
+            if self.is_json_prompt and _stream_json_answer_end(model_previous, token):
+                self.found_answer_end = True
+
                 if token:
                     try:
                         answer_token_section = token.index('"')
                         yield DanswerAnswerPiece(
-                            answer_piece=hold_quote + token[:answer_token_section]
+                            answer_piece=self.hold_quote + token[:answer_token_section]
                         )
                     except ValueError:
                         logger.error("Quotation mark not found in token")
-                        yield DanswerAnswerPiece(answer_piece=hold_quote + token)
+                        yield DanswerAnswerPiece(answer_piece=self.hold_quote + token)
                 yield DanswerAnswerPiece(answer_piece=None)
-                continue
-            elif not is_json_prompt:
-                if quote_pat in hold_quote + token or quote_loose in hold_quote + token:
-                    found_answer_end = True
+                return
+
+            elif not self.is_json_prompt:
+                quote_pat = f"\n{QUOTE_PAT}"
+                quote_loose = f"\n{quote_pat[:-1]}\n"
+                quote_pat_full = f"\n{quote_pat}"
+
+                if (
+                    quote_pat in self.hold_quote + token
+                    or quote_loose in self.hold_quote + token
+                ):
+                    self.found_answer_end = True
                     yield DanswerAnswerPiece(answer_piece=None)
-                    continue
-                if hold_quote + token in quote_pat_full:
-                    hold_quote += token
-                    continue
-            yield DanswerAnswerPiece(answer_piece=hold_quote + token)
-            hold_quote = ""
+                    return
+                if self.hold_quote + token in quote_pat_full:
+                    self.hold_quote += token
+                    return
 
-    logger.debug(f"Raw Model QnA Output: {model_output}")
-
-    yield _extract_quotes_from_completed_token_stream(
-        model_output=model_output,
-        context_docs=context_docs,
-        is_json_prompt=is_json_prompt,
-    )
-
-
-def build_quotes_processor(
-    context_docs: list[LlmDoc], is_json_prompt: bool
-) -> Callable[[Iterator[str]], AnswerQuestionStreamReturn]:
-    def stream_processor(tokens: Iterator[str]) -> AnswerQuestionStreamReturn:
-        yield from process_model_tokens(
-            tokens=tokens,
-            context_docs=context_docs,
-            is_json_prompt=is_json_prompt,
-        )
-
-    return stream_processor
+            yield DanswerAnswerPiece(answer_piece=self.hold_quote + token)
+            self.hold_quote = ""

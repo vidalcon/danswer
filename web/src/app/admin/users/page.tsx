@@ -6,13 +6,13 @@ import { useState } from "react";
 import { FiPlusSquare } from "react-icons/fi";
 import { Modal } from "@/components/Modal";
 
-import { Button, Text } from "@tremor/react";
+import { Button } from "@/components/ui/button";
+import Text from "@/components/ui/text";
 import { LoadingAnimation } from "@/components/Loading";
 import { AdminPageTitle } from "@/components/admin/Title";
 import { usePopup, PopupSpec } from "@/components/admin/connectors/Popup";
 import { UsersIcon } from "@/components/icons/icons";
 import { errorHandlingFetcher } from "@/lib/fetcher";
-import { type User, UserStatus } from "@/lib/types";
 import useSWR, { mutate } from "swr";
 import { ErrorCallout } from "@/components/ErrorCallout";
 import { HidableSection } from "@/app/admin/assistants/HidableSection";
@@ -188,17 +188,20 @@ const AddUserButton = ({
   };
   return (
     <>
-      <Button className="w-fit" onClick={() => setModal(true)}>
+      <Button className="my-auto w-fit" onClick={() => setModal(true)}>
         <div className="flex">
           <FiPlusSquare className="my-auto mr-2" />
           Invite Users
         </div>
       </Button>
+
       {modal && (
         <Modal title="Bulk Add Users" onOutsideClick={() => setModal(false)}>
           <div className="flex flex-col gap-y-4">
             <Text className="font-medium text-base">
               Add the email addresses to import, separated by whitespaces.
+              Invited users will be able to login to this domain with their
+              email address.
             </Text>
             <BulkAdd onSuccess={onSuccess} onFailure={onFailure} />
           </div>

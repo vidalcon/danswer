@@ -2,24 +2,19 @@ import {
   AnswerPiecePacket,
   DanswerDocument,
   Filters,
+  StreamStopInfo,
 } from "@/lib/search/interfaces";
-import { handleStream } from "@/lib/search/streamingUtils";
-import { FeedbackType } from "./types";
-import {
-  Dispatch,
-  MutableRefObject,
-  RefObject,
-  SetStateAction,
-  useEffect,
-  useRef,
-} from "react";
+import { handleSSEStream } from "@/lib/search/streamingUtils";
+import { ChatState, FeedbackType } from "./types";
+import { MutableRefObject, RefObject, useEffect, useRef } from "react";
 import {
   BackendMessage,
   ChatSession,
   DocumentsResponse,
   FileDescriptor,
-  ImageGenerationDisplay,
+  FileChatDisplay,
   Message,
+  MessageResponseIDInfo,
   RetrievalType,
   StreamingError,
   ToolCallMetadata,
@@ -27,9 +22,40 @@ import {
 import { Persona } from "../admin/assistants/interfaces";
 import { ReadonlyURLSearchParams } from "next/navigation";
 import { SEARCH_PARAM_NAMES } from "./searchParams";
+import { Settings } from "../admin/settings/interfaces";
+
+interface ChatRetentionInfo {
+  chatRetentionDays: number;
+  daysFromCreation: number;
+  daysUntilExpiration: number;
+  showRetentionWarning: boolean;
+}
+
+export function getChatRetentionInfo(
+  chatSession: ChatSession,
+  settings: Settings
+): ChatRetentionInfo {
+  // If `maximum_chat_retention_days` isn't set- never display retention warning.
+  const chatRetentionDays = settings.maximum_chat_retention_days || 10000;
+  const createdDate = new Date(chatSession.time_created);
+  const today = new Date();
+  const daysFromCreation = Math.ceil(
+    (today.getTime() - createdDate.getTime()) / (1000 * 3600 * 24)
+  );
+  const daysUntilExpiration = chatRetentionDays - daysFromCreation;
+  const showRetentionWarning =
+    chatRetentionDays < 7 ? daysUntilExpiration < 2 : daysUntilExpiration < 7;
+
+  return {
+    chatRetentionDays,
+    daysFromCreation,
+    daysUntilExpiration,
+    showRetentionWarning,
+  };
+}
 
 export async function updateModelOverrideForChatSession(
-  chatSessionId: number,
+  chatSessionId: string,
   newAlternateModel: string
 ) {
   const response = await fetch("/api/chat/update-chat-session-model", {
@@ -48,7 +74,7 @@ export async function updateModelOverrideForChatSession(
 export async function createChatSession(
   personaId: number,
   description: string | null
-): Promise<number> {
+): Promise<string> {
   const createChatSessionResponse = await fetch(
     "/api/chat/create-chat-session",
     {
@@ -77,10 +103,13 @@ export type PacketType =
   | BackendMessage
   | AnswerPiecePacket
   | DocumentsResponse
-  | ImageGenerationDisplay
-  | StreamingError;
+  | FileChatDisplay
+  | StreamingError
+  | MessageResponseIDInfo
+  | StreamStopInfo;
 
 export async function* sendMessage({
+  regenerate,
   message,
   fileDescriptors,
   parentMessageId,
@@ -96,83 +125,85 @@ export async function* sendMessage({
   systemPromptOverride,
   useExistingUserMessage,
   alternateAssistantId,
+  signal,
 }: {
+  regenerate: boolean;
   message: string;
   fileDescriptors: FileDescriptor[];
   parentMessageId: number | null;
-  chatSessionId: number;
+  chatSessionId: string;
   promptId: number | null | undefined;
   filters: Filters | null;
   selectedDocumentIds: number[] | null;
   queryOverride?: string;
   forceSearch?: boolean;
-  // LLM overrides
   modelProvider?: string;
   modelVersion?: string;
   temperature?: number;
-  // prompt overrides
   systemPromptOverride?: string;
-  // if specified, will use the existing latest user message
-  // and will ignore the specified `message`
   useExistingUserMessage?: boolean;
   alternateAssistantId?: number;
-}) {
+  signal?: AbortSignal;
+}): AsyncGenerator<PacketType, void, unknown> {
   const documentsAreSelected =
     selectedDocumentIds && selectedDocumentIds.length > 0;
 
-  const sendMessageResponse = await fetch("/api/chat/send-message", {
+  const body = JSON.stringify({
+    alternate_assistant_id: alternateAssistantId,
+    chat_session_id: chatSessionId,
+    parent_message_id: parentMessageId,
+    message: message,
+    prompt_id: promptId,
+    search_doc_ids: documentsAreSelected ? selectedDocumentIds : null,
+    file_descriptors: fileDescriptors,
+    regenerate,
+    retrieval_options: !documentsAreSelected
+      ? {
+          run_search:
+            promptId === null ||
+            promptId === undefined ||
+            queryOverride ||
+            forceSearch
+              ? "always"
+              : "auto",
+          real_time: true,
+          filters: filters,
+        }
+      : null,
+    query_override: queryOverride,
+    prompt_override: systemPromptOverride
+      ? {
+          system_prompt: systemPromptOverride,
+        }
+      : null,
+    llm_override:
+      temperature || modelVersion
+        ? {
+            temperature,
+            model_provider: modelProvider,
+            model_version: modelVersion,
+          }
+        : null,
+    use_existing_user_message: useExistingUserMessage,
+  });
+
+  const response = await fetch(`/api/chat/send-message`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      alternate_assistant_id: alternateAssistantId,
-      chat_session_id: chatSessionId,
-      parent_message_id: parentMessageId,
-      message: message,
-      prompt_id: promptId,
-      search_doc_ids: documentsAreSelected ? selectedDocumentIds : null,
-      file_descriptors: fileDescriptors,
-      retrieval_options: !documentsAreSelected
-        ? {
-            run_search:
-              promptId === null ||
-              promptId === undefined ||
-              queryOverride ||
-              forceSearch
-                ? "always"
-                : "auto",
-            real_time: true,
-            filters: filters,
-          }
-        : null,
-      query_override: queryOverride,
-      prompt_override: systemPromptOverride
-        ? {
-            system_prompt: systemPromptOverride,
-          }
-        : null,
-      llm_override:
-        temperature || modelVersion
-          ? {
-              temperature,
-              model_provider: modelProvider,
-              model_version: modelVersion,
-            }
-          : null,
-      use_existing_user_message: useExistingUserMessage,
-    }),
+    body,
+    signal,
   });
-  if (!sendMessageResponse.ok) {
-    const errorJson = await sendMessageResponse.json();
-    const errorMsg = errorJson.message || errorJson.detail || "";
-    throw Error(`Failed to send message - ${errorMsg}`);
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`);
   }
 
-  yield* handleStream<PacketType>(sendMessageResponse);
+  yield* handleSSEStream<PacketType>(response);
 }
 
-export async function nameChatSession(chatSessionId: number, message: string) {
+export async function nameChatSession(chatSessionId: string, message: string) {
   const response = await fetch("/api/chat/rename-chat-session", {
     method: "PUT",
     headers: {
@@ -221,7 +252,7 @@ export async function handleChatFeedback(
   return response;
 }
 export async function renameChatSession(
-  chatSessionId: number,
+  chatSessionId: string,
   newName: string
 ) {
   const response = await fetch(`/api/chat/rename-chat-session`, {
@@ -238,7 +269,7 @@ export async function renameChatSession(
   return response;
 }
 
-export async function deleteChatSession(chatSessionId: number) {
+export async function deleteChatSession(chatSessionId: string) {
   const response = await fetch(
     `/api/chat/delete-chat-session/${chatSessionId}`,
     {
@@ -353,13 +384,12 @@ export function getLastSuccessfulMessageId(messageHistory: Message[]) {
     .reverse()
     .find(
       (message) =>
-        message.type === "assistant" &&
+        (message.type === "assistant" || message.type === "system") &&
         message.messageId !== -1 &&
         message.messageId !== null
     );
   return lastSuccessfulMessage ? lastSuccessfulMessage?.messageId : null;
 }
-
 export function processRawChatHistory(
   rawMessages: BackendMessage[]
 ): Map<number, Message> {
@@ -398,10 +428,11 @@ export function processRawChatHistory(
             citations: messageInfo?.citations || {},
           }
         : {}),
-      toolCalls: messageInfo.tool_calls,
+      toolCall: messageInfo.tool_call,
       parentMessageId: messageInfo.parent_message,
       childrenMessageIds: [],
       latestChildMessageId: messageInfo.latest_child_message,
+      overridden_model: messageInfo.overridden_model,
     };
 
     messages.set(messageInfo.message_id, message);
@@ -505,7 +536,7 @@ export function removeMessage(
 
 export function checkAnyAssistantHasSearch(
   messageHistory: Message[],
-  availablePersonas: Persona[],
+  availableAssistants: Persona[],
   livePersona: Persona
 ): boolean {
   const response =
@@ -516,11 +547,9 @@ export function checkAnyAssistantHasSearch(
       ) {
         return false;
       }
-
-      const alternateAssistant = availablePersonas.find(
-        (persona) => persona.id === message.alternateAssistantID
+      const alternateAssistant = availableAssistants.find(
+        (assistant) => assistant.id === message.alternateAssistantID
       );
-
       return alternateAssistant
         ? personaIncludesRetrieval(alternateAssistant)
         : false;
@@ -530,12 +559,23 @@ export function checkAnyAssistantHasSearch(
 }
 
 export function personaIncludesRetrieval(selectedPersona: Persona) {
-  return selectedPersona.num_chunks !== 0;
+  return selectedPersona.tools.some(
+    (tool) =>
+      tool.in_code_tool_id &&
+      ["SearchTool", "InternetSearchTool"].includes(tool.in_code_tool_id)
+  );
+}
+
+export function personaIncludesImage(selectedPersona: Persona) {
+  return selectedPersona.tools.some(
+    (tool) =>
+      tool.in_code_tool_id && tool.in_code_tool_id == "ImageGenerationTool"
+  );
 }
 
 const PARAMS_TO_SKIP = [
   SEARCH_PARAM_NAMES.SUBMIT_ON_LOAD,
-  SEARCH_PARAM_NAMES.USER_MESSAGE,
+  SEARCH_PARAM_NAMES.USER_PROMPT,
   SEARCH_PARAM_NAMES.TITLE,
   // only use these if explicitly passed in
   SEARCH_PARAM_NAMES.CHAT_ID,
@@ -544,12 +584,17 @@ const PARAMS_TO_SKIP = [
 
 export function buildChatUrl(
   existingSearchParams: ReadonlyURLSearchParams,
-  chatSessionId: number | null,
-  personaId: number | null
+  chatSessionId: string | null,
+  personaId: number | null,
+  search?: boolean
 ) {
   const finalSearchParams: string[] = [];
   if (chatSessionId) {
-    finalSearchParams.push(`${SEARCH_PARAM_NAMES.CHAT_ID}=${chatSessionId}`);
+    finalSearchParams.push(
+      `${
+        search ? SEARCH_PARAM_NAMES.SEARCH_ID : SEARCH_PARAM_NAMES.CHAT_ID
+      }=${chatSessionId}`
+    );
   }
   if (personaId !== null) {
     finalSearchParams.push(`${SEARCH_PARAM_NAMES.PERSONA_ID}=${personaId}`);
@@ -563,10 +608,10 @@ export function buildChatUrl(
   const finalSearchParamsString = finalSearchParams.join("&");
 
   if (finalSearchParamsString) {
-    return `/chat?${finalSearchParamsString}`;
+    return `/${search ? "search" : "chat"}?${finalSearchParamsString}`;
   }
 
-  return "/chat";
+  return `/${search ? "search" : "chat"}`;
 }
 
 export async function uploadFilesForChat(
@@ -590,28 +635,34 @@ export async function uploadFilesForChat(
 }
 
 export async function useScrollonStream({
-  isStreaming,
+  chatState,
   scrollableDivRef,
   scrollDist,
   endDivRef,
-  distance,
-  debounce,
+  debounceNumber,
+  mobile,
 }: {
-  isStreaming: boolean;
+  chatState: ChatState;
   scrollableDivRef: RefObject<HTMLDivElement>;
+  waitForScrollRef: RefObject<boolean>;
   scrollDist: MutableRefObject<number>;
   endDivRef: RefObject<HTMLDivElement>;
-  distance: number;
-  debounce: number;
+  debounceNumber: number;
+  mobile?: boolean;
 }) {
+  const mobileDistance = 900; // distance that should "engage" the scroll
+  const desktopDistance = 500; // distance that should "engage" the scroll
+
+  const distance = mobile ? mobileDistance : desktopDistance;
+
   const preventScrollInterference = useRef<boolean>(false);
   const preventScroll = useRef<boolean>(false);
   const blockActionRef = useRef<boolean>(false);
   const previousScroll = useRef<number>(0);
 
   useEffect(() => {
-    if (isStreaming && scrollableDivRef && scrollableDivRef.current) {
-      let newHeight: number = scrollableDivRef.current?.scrollTop!;
+    if (chatState != "input" && scrollableDivRef && scrollableDivRef.current) {
+      const newHeight: number = scrollableDivRef.current?.scrollTop!;
       const heightDifference = newHeight - previousScroll.current;
       previousScroll.current = newHeight;
 
@@ -644,8 +695,9 @@ export async function useScrollonStream({
         endDivRef.current
       ) {
         // catch up if necessary!
-        const scrollAmount = scrollDist.current + 10000;
-        if (scrollDist.current > 140) {
+        const scrollAmount = scrollDist.current + (mobile ? 1000 : 10000);
+        if (scrollDist.current > 300) {
+          // if (scrollDist.current > 140) {
           endDivRef.current.scrollIntoView();
         } else {
           blockActionRef.current = true;
@@ -658,7 +710,7 @@ export async function useScrollonStream({
 
           setTimeout(() => {
             blockActionRef.current = false;
-          }, debounce);
+          }, debounceNumber);
         }
       }
     }
@@ -666,8 +718,8 @@ export async function useScrollonStream({
 
   // scroll on end of stream if within distance
   useEffect(() => {
-    if (scrollableDivRef?.current && !isStreaming) {
-      if (scrollDist.current < distance) {
+    if (scrollableDivRef?.current && chatState == "input") {
+      if (scrollDist.current < distance - 50) {
         scrollableDivRef?.current?.scrollBy({
           left: 0,
           top: Math.max(scrollDist.current + 600, 0),
@@ -675,5 +727,5 @@ export async function useScrollonStream({
         });
       }
     }
-  }, [isStreaming]);
+  }, [chatState, distance, scrollDist, scrollableDivRef]);
 }

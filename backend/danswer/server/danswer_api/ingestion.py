@@ -3,15 +3,18 @@ from fastapi import Depends
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
+from danswer.auth.users import api_key_dep
 from danswer.configs.constants import DocumentSource
 from danswer.connectors.models import Document
 from danswer.connectors.models import IndexAttemptMetadata
 from danswer.db.connector_credential_pair import get_connector_credential_pair_from_id
 from danswer.db.document import get_documents_by_cc_pair
 from danswer.db.document import get_ingestion_documents
-from danswer.db.embedding_model import get_current_db_embedding_model
-from danswer.db.embedding_model import get_secondary_db_embedding_model
+from danswer.db.engine import get_current_tenant_id
 from danswer.db.engine import get_session
+from danswer.db.models import User
+from danswer.db.search_settings import get_current_search_settings
+from danswer.db.search_settings import get_secondary_search_settings
 from danswer.document_index.document_index_utils import get_both_index_names
 from danswer.document_index.factory import get_default_document_index
 from danswer.indexing.embedder import DefaultIndexingEmbedder
@@ -20,7 +23,6 @@ from danswer.server.danswer_api.models import DocMinimalInfo
 from danswer.server.danswer_api.models import IngestionDocument
 from danswer.server.danswer_api.models import IngestionResult
 from danswer.utils.logger import setup_logger
-from ee.danswer.auth.users import api_key_dep
 
 logger = setup_logger()
 
@@ -31,7 +33,7 @@ router = APIRouter(prefix="/danswer-api")
 @router.get("/connector-docs/{cc_pair_id}")
 def get_docs_by_connector_credential_pair(
     cc_pair_id: int,
-    _: str = Depends(api_key_dep),
+    _: User | None = Depends(api_key_dep),
     db_session: Session = Depends(get_session),
 ) -> list[DocMinimalInfo]:
     db_docs = get_documents_by_cc_pair(cc_pair_id=cc_pair_id, db_session=db_session)
@@ -47,7 +49,7 @@ def get_docs_by_connector_credential_pair(
 
 @router.get("/ingestion")
 def get_ingestion_docs(
-    _: str = Depends(api_key_dep),
+    _: User | None = Depends(api_key_dep),
     db_session: Session = Depends(get_session),
 ) -> list[DocMinimalInfo]:
     db_docs = get_ingestion_documents(db_session)
@@ -64,8 +66,9 @@ def get_ingestion_docs(
 @router.post("/ingestion")
 def upsert_ingestion_doc(
     doc_info: IngestionDocument,
-    _: str = Depends(api_key_dep),
+    _: User | None = Depends(api_key_dep),
     db_session: Session = Depends(get_session),
+    tenant_id: str = Depends(get_current_tenant_id),
 ) -> IngestionResult:
     doc_info.document.from_ingestion_api = True
 
@@ -89,13 +92,10 @@ def upsert_ingestion_doc(
         primary_index_name=curr_ind_name, secondary_index_name=None
     )
 
-    db_embedding_model = get_current_db_embedding_model(db_session)
+    search_settings = get_current_search_settings(db_session)
 
-    index_embedding_model = DefaultIndexingEmbedder(
-        model_name=db_embedding_model.model_name,
-        normalize=db_embedding_model.normalize,
-        query_prefix=db_embedding_model.query_prefix,
-        passage_prefix=db_embedding_model.passage_prefix,
+    index_embedding_model = DefaultIndexingEmbedder.from_db_search_settings(
+        search_settings=search_settings
     )
 
     indexing_pipeline = build_indexing_pipeline(
@@ -103,10 +103,11 @@ def upsert_ingestion_doc(
         document_index=curr_doc_index,
         ignore_time_skip=True,
         db_session=db_session,
+        tenant_id=tenant_id,
     )
 
-    new_doc, chunks = indexing_pipeline(
-        documents=[document],
+    new_doc, __chunk_count = indexing_pipeline(
+        document_batch=[document],
         index_attempt_metadata=IndexAttemptMetadata(
             connector_id=cc_pair.connector_id,
             credential_id=cc_pair.credential_id,
@@ -119,19 +120,16 @@ def upsert_ingestion_doc(
             primary_index_name=curr_ind_name, secondary_index_name=None
         )
 
-        sec_db_embedding_model = get_secondary_db_embedding_model(db_session)
+        sec_search_settings = get_secondary_search_settings(db_session)
 
-        if sec_db_embedding_model is None:
+        if sec_search_settings is None:
             # Should not ever happen
             raise RuntimeError(
-                "Secondary index exists but no embedding model configured"
+                "Secondary index exists but no search settings configured"
             )
 
-        new_index_embedding_model = DefaultIndexingEmbedder(
-            model_name=sec_db_embedding_model.model_name,
-            normalize=sec_db_embedding_model.normalize,
-            query_prefix=sec_db_embedding_model.query_prefix,
-            passage_prefix=sec_db_embedding_model.passage_prefix,
+        new_index_embedding_model = DefaultIndexingEmbedder.from_db_search_settings(
+            search_settings=sec_search_settings
         )
 
         sec_ind_pipeline = build_indexing_pipeline(
@@ -139,10 +137,11 @@ def upsert_ingestion_doc(
             document_index=sec_doc_index,
             ignore_time_skip=True,
             db_session=db_session,
+            tenant_id=tenant_id,
         )
 
         sec_ind_pipeline(
-            documents=[document],
+            document_batch=[document],
             index_attempt_metadata=IndexAttemptMetadata(
                 connector_id=cc_pair.connector_id,
                 credential_id=cc_pair.credential_id,

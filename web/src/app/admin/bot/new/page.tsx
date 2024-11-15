@@ -5,12 +5,26 @@ import { fetchSS } from "@/lib/utilsSS";
 import { ErrorCallout } from "@/components/ErrorCallout";
 import { DocumentSet } from "@/lib/types";
 import { BackButton } from "@/components/BackButton";
-import { Text } from "@tremor/react";
-import { Persona } from "../../assistants/interfaces";
+import {
+  FetchAssistantsResponse,
+  fetchAssistantsSS,
+} from "@/lib/assistants/fetchAssistantsSS";
+import { getStandardAnswerCategoriesIfEE } from "@/components/standardAnswers/getStandardAnswerCategoriesIfEE";
 
 async function Page() {
-  const tasks = [fetchSS("/manage/document-set"), fetchSS("/persona")];
-  const [documentSetsResponse, personasResponse] = await Promise.all(tasks);
+  const tasks = [fetchSS("/manage/document-set"), fetchAssistantsSS()];
+  const [
+    documentSetsResponse,
+    [assistants, assistantsFetchError],
+    standardAnswerCategoriesResponse,
+  ] = (await Promise.all(tasks)) as [
+    Response,
+    FetchAssistantsResponse,
+    Response,
+  ];
+
+  const eeStandardAnswerCategoryResponse =
+    await getStandardAnswerCategoriesIfEE();
 
   if (!documentSetsResponse.ok) {
     return (
@@ -22,15 +36,14 @@ async function Page() {
   }
   const documentSets = (await documentSetsResponse.json()) as DocumentSet[];
 
-  if (!personasResponse.ok) {
+  if (assistantsFetchError) {
     return (
       <ErrorCallout
         errorTitle="Something went wrong :("
-        errorMsg={`Failed to fetch personas - ${await personasResponse.text()}`}
+        errorMsg={`Failed to fetch assistants - ${assistantsFetchError}`}
       />
     );
   }
-  const personas = (await personasResponse.json()) as Persona[];
 
   return (
     <div className="container mx-auto">
@@ -40,12 +53,11 @@ async function Page() {
         title="New Slack Bot Config"
       />
 
-      <Text className="mb-8">
-        Define a new configuration below! This config will determine how
-        DanswerBot behaves in the specified channels.
-      </Text>
-
-      <SlackBotCreationForm documentSets={documentSets} personas={personas} />
+      <SlackBotCreationForm
+        documentSets={documentSets}
+        personas={assistants}
+        standardAnswerCategoryResponse={eeStandardAnswerCategoryResponse}
+      />
     </div>
   );
 }

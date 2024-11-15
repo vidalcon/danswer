@@ -1,4 +1,4 @@
-import { type User, UserStatus } from "@/lib/types";
+import { type User, UserStatus, UserRole, USER_ROLE_LABELS } from "@/lib/types";
 import CenteredPageSelector from "./CenteredPageSelector";
 import { type PageSelectorProps } from "@/components/PageSelector";
 import { HidableSection } from "@/app/admin/assistants/HidableSection";
@@ -9,11 +9,23 @@ import {
   Table,
   TableHead,
   TableRow,
-  TableHeaderCell,
   TableBody,
   TableCell,
-  Button,
-} from "@tremor/react";
+} from "@/components/ui/table";
+
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { GenericConfirmModal } from "@/components/modals/GenericConfirmModal";
+import { useState } from "react";
+import { usePaidEnterpriseFeaturesEnabled } from "@/components/settings/usePaidEnterpriseFeaturesEnabled";
+import { DeleteEntityModal } from "@/components/modals/DeleteEntityModal";
+import { TableHeader } from "@/components/ui/table";
 
 interface Props {
   users: Array<User>;
@@ -21,33 +33,100 @@ interface Props {
   mutate: () => void;
 }
 
-const PromoterButton = ({
+const UserRoleDropdown = ({
   user,
-  promote,
   onSuccess,
   onError,
 }: {
   user: User;
-  promote: boolean;
   onSuccess: () => void;
   onError: (message: string) => void;
 }) => {
-  const { trigger, isMutating } = useSWRMutation(
-    promote
-      ? "/api/manage/promote-user-to-admin"
-      : "/api/manage/demote-admin-to-basic",
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [pendingRole, setPendingRole] = useState<string | null>(null);
+
+  const { trigger: setUserRole, isMutating: isSettingRole } = useSWRMutation(
+    "/api/manage/set-user-role",
     userMutationFetcher,
     { onSuccess, onError }
   );
+  const isPaidEnterpriseFeaturesEnabled = usePaidEnterpriseFeaturesEnabled();
+
+  const handleChange = (value: string) => {
+    if (value === user.role) return;
+    if (user.role === UserRole.CURATOR) {
+      setShowConfirmModal(true);
+      setPendingRole(value);
+    } else {
+      setUserRole({
+        user_email: user.email,
+        new_role: value,
+      });
+    }
+  };
+
+  const handleConfirm = () => {
+    if (pendingRole) {
+      setUserRole({
+        user_email: user.email,
+        new_role: pendingRole,
+      });
+    }
+    setShowConfirmModal(false);
+    setPendingRole(null);
+  };
+
   return (
-    <Button
-      className="w-min"
-      onClick={() => trigger({ user_email: user.email })}
-      disabled={isMutating}
-      size="xs"
-    >
-      {promote ? "Promote" : "Demote"} to {promote ? "Admin" : "Basic"} User
-    </Button>
+    <>
+      <Select
+        value={user.role}
+        onValueChange={handleChange}
+        disabled={isSettingRole}
+      >
+        <SelectTrigger>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {Object.entries(USER_ROLE_LABELS).map(([role, label]) =>
+            !isPaidEnterpriseFeaturesEnabled &&
+            (role === UserRole.CURATOR ||
+              role === UserRole.GLOBAL_CURATOR) ? null : (
+              <SelectItem
+                key={role}
+                value={role}
+                className={
+                  role === UserRole.CURATOR
+                    ? "opacity-30 cursor-not-allowed"
+                    : ""
+                }
+                title={
+                  role === UserRole.CURATOR
+                    ? "Curator role must be assigned in the Groups tab"
+                    : ""
+                }
+              >
+                {label}
+              </SelectItem>
+            )
+          )}
+        </SelectContent>
+      </Select>
+      {showConfirmModal && (
+        <GenericConfirmModal
+          title="Change Curator Role"
+          message={`Warning: Switching roles from Curator to ${
+            USER_ROLE_LABELS[pendingRole as UserRole] ??
+            USER_ROLE_LABELS[user.role]
+          } will remove their status as individual curators from all groups.`}
+          confirmText={`Switch Role to ${
+            USER_ROLE_LABELS[pendingRole as UserRole] ??
+            USER_ROLE_LABELS[user.role]
+          }`}
+          onClose={() => setShowConfirmModal(false)}
+          onConfirm={handleConfirm}
+        />
+      )}
+    </>
   );
 };
 
@@ -75,7 +154,8 @@ const DeactivaterButton = ({
           type: "success",
         });
       },
-      onError: (errorMsg) => setPopup({ message: errorMsg, type: "error" }),
+      onError: (errorMsg) =>
+        setPopup({ message: errorMsg.message, type: "error" }),
     }
   );
   return (
@@ -83,10 +163,64 @@ const DeactivaterButton = ({
       className="w-min"
       onClick={() => trigger({ user_email: user.email })}
       disabled={isMutating}
-      size="xs"
+      size="sm"
     >
       {deactivate ? "Deactivate" : "Activate"}
     </Button>
+  );
+};
+
+const DeleteUserButton = ({
+  user,
+  setPopup,
+  mutate,
+}: {
+  user: User;
+  setPopup: (spec: PopupSpec) => void;
+  mutate: () => void;
+}) => {
+  const { trigger, isMutating } = useSWRMutation(
+    "/api/manage/admin/delete-user",
+    userMutationFetcher,
+    {
+      onSuccess: () => {
+        mutate();
+        setPopup({
+          message: "User deleted successfully!",
+          type: "success",
+        });
+      },
+      onError: (errorMsg) =>
+        setPopup({
+          message: `Unable to delete user - ${errorMsg}`,
+          type: "error",
+        }),
+    }
+  );
+
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  return (
+    <>
+      {showDeleteModal && (
+        <DeleteEntityModal
+          entityType="user"
+          entityName={user.email}
+          onClose={() => setShowDeleteModal(false)}
+          onSubmit={() => trigger({ user_email: user.email, method: "DELETE" })}
+          additionalDetails="All data associated with this user will be deleted (including personas, tools and chat sessions)."
+        />
+      )}
+
+      <Button
+        className="w-min"
+        onClick={() => setShowDeleteModal(true)}
+        disabled={isMutating}
+        size="sm"
+        variant="destructive"
+      >
+        Delete
+      </Button>
+    </>
   );
 };
 
@@ -100,31 +234,15 @@ const SignedUpUserTable = ({
 }: Props & PageSelectorProps) => {
   if (!users.length) return null;
 
-  const onSuccess = (message: string) => {
-    mutate();
-    setPopup({
-      message,
-      type: "success",
-    });
+  const handlePopup = (message: string, type: "success" | "error") => {
+    if (type === "success") mutate();
+    setPopup({ message, type });
   };
-  const onError = (message: string) => {
-    setPopup({
-      message,
-      type: "error",
-    });
-  };
-  const onPromotionSuccess = () => {
-    onSuccess("User promoted to admin user!");
-  };
-  const onPromotionError = (errorMsg: string) => {
-    onError(`Unable to promote user - ${errorMsg}`);
-  };
-  const onDemotionSuccess = () => {
-    onSuccess("Admin demoted to basic user!");
-  };
-  const onDemotionError = (errorMsg: string) => {
-    onError(`Unable to demote admin - ${errorMsg}`);
-  };
+
+  const onRoleChangeSuccess = () =>
+    handlePopup("User role updated successfully!", "success");
+  const onRoleChangeError = (errorMsg: string) =>
+    handlePopup(`Unable to update user role - ${errorMsg}`, "error");
 
   return (
     <HidableSection sectionTitle="Current Users">
@@ -137,42 +255,47 @@ const SignedUpUserTable = ({
           />
         ) : null}
         <Table className="overflow-visible">
-          <TableHead>
+          <TableHeader>
             <TableRow>
-              <TableHeaderCell>Email</TableHeaderCell>
-              <TableHeaderCell>Role</TableHeaderCell>
-              <TableHeaderCell>Status</TableHeaderCell>
-              <TableHeaderCell>
+              <TableHead>Email</TableHead>
+              <TableHead className="text-center">Role</TableHead>
+              <TableHead className="text-center">Status</TableHead>
+              <TableHead>
                 <div className="flex">
                   <div className="ml-auto">Actions</div>
                 </div>
-              </TableHeaderCell>
+              </TableHead>
             </TableRow>
-          </TableHead>
+          </TableHeader>
           <TableBody>
             {users.map((user) => (
               <TableRow key={user.id}>
                 <TableCell>{user.email}</TableCell>
-                <TableCell>
-                  <i>{user.role === "admin" ? "Admin" : "User"}</i>
+                <TableCell className="w-40 ">
+                  <UserRoleDropdown
+                    user={user}
+                    onSuccess={onRoleChangeSuccess}
+                    onError={onRoleChangeError}
+                  />
                 </TableCell>
-                <TableCell>
+                <TableCell className="text-center">
                   <i>{user.status === "live" ? "Active" : "Inactive"}</i>
                 </TableCell>
                 <TableCell>
-                  <div className="flex flex-col items-end gap-y-2">
-                    <PromoterButton
-                      user={user}
-                      promote={user.role !== "admin"}
-                      onSuccess={onPromotionSuccess}
-                      onError={onPromotionError}
-                    />
+                  <div className="flex justify-end  gap-x-2">
                     <DeactivaterButton
                       user={user}
                       deactivate={user.status === UserStatus.live}
                       setPopup={setPopup}
                       mutate={mutate}
                     />
+                    {user.status == UserStatus.deactivated && (
+                      <DeleteUserButton
+                        user={user}
+                        setPopup={setPopup}
+                        mutate={mutate}
+                      />
+                    )}
                   </div>
                 </TableCell>
               </TableRow>

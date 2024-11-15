@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -15,6 +16,10 @@ from danswer.db.persona import get_default_prompt
 from danswer.db.persona import mark_persona_as_deleted
 from danswer.db.persona import upsert_persona
 from danswer.search.enums import RecencyBiasSetting
+from danswer.utils.errors import EERequiredError
+from danswer.utils.variable_functionality import (
+    fetch_versioned_implementation_with_fallback,
+)
 
 
 def _build_persona_name(channel_names: list[str]) -> str:
@@ -39,6 +44,7 @@ def create_slack_bot_persona(
     document_set_ids: list[int],
     existing_persona_id: int | None = None,
     num_chunks: float = MAX_CHUNKS_FED_TO_CHAT,
+    enable_auto_filters: bool = False,
 ) -> Persona:
     """NOTE: does not commit changes"""
 
@@ -52,7 +58,7 @@ def create_slack_bot_persona(
         description="",
         num_chunks=num_chunks,
         llm_relevance_filter=True,
-        llm_filter_extraction=True,
+        llm_filter_extraction=enable_auto_filters,
         recency_bias=RecencyBiasSetting.AUTO,
         prompt_ids=[default_prompt.id],
         document_set_ids=document_set_ids,
@@ -60,7 +66,7 @@ def create_slack_bot_persona(
         llm_model_version_override=None,
         starter_messages=None,
         is_public=True,
-        default_persona=False,
+        is_default_persona=False,
         db_session=db_session,
         commit=False,
     )
@@ -68,16 +74,48 @@ def create_slack_bot_persona(
     return persona
 
 
+def _no_ee_standard_answer_categories(*args: Any, **kwargs: Any) -> list:
+    return []
+
+
 def insert_slack_bot_config(
     persona_id: int | None,
     channel_config: ChannelConfig,
     response_type: SlackBotResponseType,
+    standard_answer_category_ids: list[int],
+    enable_auto_filters: bool,
     db_session: Session,
 ) -> SlackBotConfig:
+    versioned_fetch_standard_answer_categories_by_ids = (
+        fetch_versioned_implementation_with_fallback(
+            "danswer.db.standard_answer",
+            "fetch_standard_answer_categories_by_ids",
+            _no_ee_standard_answer_categories,
+        )
+    )
+    existing_standard_answer_categories = (
+        versioned_fetch_standard_answer_categories_by_ids(
+            standard_answer_category_ids=standard_answer_category_ids,
+            db_session=db_session,
+        )
+    )
+
+    if len(existing_standard_answer_categories) != len(standard_answer_category_ids):
+        if len(existing_standard_answer_categories) == 0:
+            raise EERequiredError(
+                "Standard answers are a paid Enterprise Edition feature - enable EE or remove standard answer categories"
+            )
+        else:
+            raise ValueError(
+                f"Some or all categories with ids {standard_answer_category_ids} do not exist"
+            )
+
     slack_bot_config = SlackBotConfig(
         persona_id=persona_id,
         channel_config=channel_config,
         response_type=response_type,
+        standard_answer_categories=existing_standard_answer_categories,
+        enable_auto_filters=enable_auto_filters,
     )
     db_session.add(slack_bot_config)
     db_session.commit()
@@ -90,6 +128,8 @@ def update_slack_bot_config(
     persona_id: int | None,
     channel_config: ChannelConfig,
     response_type: SlackBotResponseType,
+    standard_answer_category_ids: list[int],
+    enable_auto_filters: bool,
     db_session: Session,
 ) -> SlackBotConfig:
     slack_bot_config = db_session.scalar(
@@ -99,6 +139,25 @@ def update_slack_bot_config(
         raise ValueError(
             f"Unable to find slack bot config with ID {slack_bot_config_id}"
         )
+
+    versioned_fetch_standard_answer_categories_by_ids = (
+        fetch_versioned_implementation_with_fallback(
+            "danswer.db.standard_answer",
+            "fetch_standard_answer_categories_by_ids",
+            _no_ee_standard_answer_categories,
+        )
+    )
+    existing_standard_answer_categories = (
+        versioned_fetch_standard_answer_categories_by_ids(
+            standard_answer_category_ids=standard_answer_category_ids,
+            db_session=db_session,
+        )
+    )
+    if len(existing_standard_answer_categories) != len(standard_answer_category_ids):
+        raise ValueError(
+            f"Some or all categories with ids {standard_answer_category_ids} do not exist"
+        )
+
     # get the existing persona id before updating the object
     existing_persona_id = slack_bot_config.persona_id
 
@@ -108,6 +167,10 @@ def update_slack_bot_config(
     slack_bot_config.persona_id = persona_id
     slack_bot_config.channel_config = channel_config
     slack_bot_config.response_type = response_type
+    slack_bot_config.standard_answer_categories = list(
+        existing_standard_answer_categories
+    )
+    slack_bot_config.enable_auto_filters = enable_auto_filters
 
     # if the persona has changed, then clean up the old persona
     if persona_id != existing_persona_id and existing_persona_id:

@@ -1,5 +1,3 @@
-import { SearchSection } from "@/components/search/SearchSection";
-import { Header } from "@/components/header/Header";
 import {
   AuthTypeMetadata,
   getAuthTypeMetadataSS,
@@ -7,38 +5,55 @@ import {
 } from "@/lib/userSS";
 import { redirect } from "next/navigation";
 import { HealthCheckBanner } from "@/components/health/healthcheck";
-import { ApiKeyModal } from "@/components/llm/ApiKeyModal";
 import { fetchSS } from "@/lib/utilsSS";
 import { CCPairBasicInfo, DocumentSet, Tag, User } from "@/lib/types";
 import { cookies } from "next/headers";
 import { SearchType } from "@/lib/search/interfaces";
 import { Persona } from "../admin/assistants/interfaces";
-import {
-  WelcomeModal,
-  hasCompletedWelcomeFlowSS,
-} from "@/components/initialSetup/welcome/WelcomeModalWrapper";
 import { unstable_noStore as noStore } from "next/cache";
 import { InstantSSRAutoRefresh } from "@/components/SSRAutoRefresh";
 import { personaComparator } from "../admin/assistants/lib";
-import { FullEmbeddingModelResponse } from "../admin/models/embedding/embeddingModels";
-import { NoSourcesModal } from "@/components/initialSetup/search/NoSourcesModal";
-import { NoCompleteSourcesModal } from "@/components/initialSetup/search/NoCompleteSourceModal";
+import { FullEmbeddingModelResponse } from "@/components/embedding/interfaces";
 import { ChatPopup } from "../chat/ChatPopup";
+import {
+  FetchAssistantsResponse,
+  fetchAssistantsSS,
+} from "@/lib/assistants/fetchAssistantsSS";
+import { ChatSession } from "../chat/interfaces";
+import { SIDEBAR_TOGGLED_COOKIE_NAME } from "@/components/resizable/constants";
+import {
+  AGENTIC_SEARCH_TYPE_COOKIE_NAME,
+  NEXT_PUBLIC_DEFAULT_SIDEBAR_OPEN,
+  DISABLE_LLM_DOC_RELEVANCE,
+} from "@/lib/constants";
+import WrappedSearch from "./WrappedSearch";
+import { SearchProvider } from "@/components/context/SearchContext";
+import { fetchLLMProvidersSS } from "@/lib/llm/fetchLLMs";
+import { LLMProviderDescriptor } from "../admin/configuration/llm/interfaces";
+import { headers } from "next/headers";
+import {
+  hasCompletedWelcomeFlowSS,
+  WelcomeModal,
+} from "@/components/initialSetup/welcome/WelcomeModalWrapper";
 
-export default async function Home() {
+export default async function Home(props: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const searchParams = await props.searchParams;
   // Disable caching so we always get the up to date connector / document set / persona info
   // importantly, this prevents users from adding a connector, going back to the main page,
   // and then getting hit with a "No Connectors" popup
   noStore();
-
+  const requestCookies = await cookies();
   const tasks = [
     getAuthTypeMetadataSS(),
     getCurrentUserSS(),
     fetchSS("/manage/indexing-status"),
     fetchSS("/manage/document-set"),
-    fetchSS("/persona"),
+    fetchAssistantsSS(),
     fetchSS("/query/valid-tags"),
-    fetchSS("/secondary-index/get-embedding-models"),
+    fetchSS("/query/user-searches"),
+    fetchLLMProvidersSS(),
   ];
 
   // catch cases where the backend is completely unreachable here
@@ -49,8 +64,10 @@ export default async function Home() {
     | Response
     | AuthTypeMetadata
     | FullEmbeddingModelResponse
+    | FetchAssistantsResponse
+    | LLMProviderDescriptor[]
     | null
-  )[] = [null, null, null, null, null, null];
+  )[] = [null, null, null, null, null, null, null, null];
   try {
     results = await Promise.all(tasks);
   } catch (e) {
@@ -60,13 +77,24 @@ export default async function Home() {
   const user = results[1] as User | null;
   const ccPairsResponse = results[2] as Response | null;
   const documentSetsResponse = results[3] as Response | null;
-  const personaResponse = results[4] as Response | null;
+  const [initialAssistantsList, assistantsFetchError] =
+    results[4] as FetchAssistantsResponse;
   const tagsResponse = results[5] as Response | null;
-  const embeddingModelResponse = results[6] as Response | null;
+  const queryResponse = results[6] as Response | null;
+  const llmProviders = (results[7] || []) as LLMProviderDescriptor[];
 
   const authDisabled = authTypeMetadata?.authType === "disabled";
+
   if (!authDisabled && !user) {
-    return redirect("/auth/login");
+    const headersList = await headers();
+    const fullUrl = headersList.get("x-url") || "/search";
+    const searchParamsString = new URLSearchParams(
+      searchParams as unknown as Record<string, string>
+    ).toString();
+    const redirectUrl = searchParamsString
+      ? `${fullUrl}?${searchParamsString}`
+      : fullUrl;
+    return redirect(`/auth/login?next=${encodeURIComponent(redirectUrl)}`);
   }
 
   if (user && !user.is_verified && authTypeMetadata?.requiresVerification) {
@@ -89,19 +117,24 @@ export default async function Home() {
     );
   }
 
-  let personas: Persona[] = [];
-
-  if (personaResponse?.ok) {
-    personas = await personaResponse.json();
+  let querySessions: ChatSession[] = [];
+  if (queryResponse?.ok) {
+    querySessions = (await queryResponse.json()).sessions;
   } else {
-    console.log(`Failed to fetch personas - ${personaResponse?.status}`);
+    console.log(`Failed to fetch chat sessions - ${queryResponse?.text()}`);
   }
-  // remove those marked as hidden by an admin
-  personas = personas.filter((persona) => persona.is_visible);
-  // hide personas with no retrieval
-  personas = personas.filter((persona) => persona.num_chunks !== 0);
-  // sort them in priority order
-  personas.sort(personaComparator);
+
+  let assistants: Persona[] = initialAssistantsList;
+  if (assistantsFetchError) {
+    console.log(`Failed to fetch assistants - ${assistantsFetchError}`);
+  } else {
+    // remove those marked as hidden by an admin
+    assistants = assistants.filter((assistant) => assistant.is_visible);
+    // hide personas with no retrieval
+    assistants = assistants.filter((assistant) => assistant.num_chunks !== 0);
+    // sort them in priority order
+    assistants.sort(personaComparator);
+  }
 
   let tags: Tag[] = [];
   if (tagsResponse?.ok) {
@@ -110,28 +143,21 @@ export default async function Home() {
     console.log(`Failed to fetch tags - ${tagsResponse?.status}`);
   }
 
-  const embeddingModelVersionInfo =
-    embeddingModelResponse && embeddingModelResponse.ok
-      ? ((await embeddingModelResponse.json()) as FullEmbeddingModelResponse)
-      : null;
-  const currentEmbeddingModelName =
-    embeddingModelVersionInfo?.current_model_name;
-  const nextEmbeddingModelName =
-    embeddingModelVersionInfo?.secondary_model_name;
-
   // needs to be done in a non-client side component due to nextjs
-  const storedSearchType = cookies().get("searchType")?.value as
+  const storedSearchType = requestCookies.get("searchType")?.value as
     | string
     | undefined;
-  let searchTypeDefault: SearchType =
+  const searchTypeDefault: SearchType =
     storedSearchType !== undefined &&
     SearchType.hasOwnProperty(storedSearchType)
       ? (storedSearchType as SearchType)
       : SearchType.SEMANTIC; // default to semantic
 
   const hasAnyConnectors = ccPairs.length > 0;
+
   const shouldShowWelcomeModal =
-    !hasCompletedWelcomeFlowSS() &&
+    !llmProviders.length &&
+    !hasCompletedWelcomeFlowSS(requestCookies) &&
     !hasAnyConnectors &&
     (!user || user.role === "admin");
 
@@ -140,48 +166,48 @@ export default async function Home() {
     ccPairs.length === 0 &&
     !shouldShowWelcomeModal;
 
-  const shouldDisplaySourcesIncompleteModal =
-    !ccPairs.some(
-      (ccPair) => ccPair.has_successful_run && ccPair.docs_indexed > 0
-    ) &&
-    !shouldDisplayNoSourcesModal &&
-    !shouldShowWelcomeModal;
+  const sidebarToggled = requestCookies.get(SIDEBAR_TOGGLED_COOKIE_NAME);
+  const agenticSearchToggle = requestCookies.get(
+    AGENTIC_SEARCH_TYPE_COOKIE_NAME
+  );
+
+  const toggleSidebar = sidebarToggled
+    ? sidebarToggled.value.toLocaleLowerCase() == "true" || false
+    : NEXT_PUBLIC_DEFAULT_SIDEBAR_OPEN;
+
+  const agenticSearchEnabled = agenticSearchToggle
+    ? agenticSearchToggle.value.toLocaleLowerCase() == "true" || false
+    : false;
 
   return (
     <>
-      <Header user={user} />
-      <div className="m-3">
-        <HealthCheckBanner />
-      </div>
-      {shouldShowWelcomeModal && <WelcomeModal user={user} />}
-
-      {!shouldShowWelcomeModal &&
-        !shouldDisplayNoSourcesModal &&
-        !shouldDisplaySourcesIncompleteModal && <ApiKeyModal user={user} />}
-
-      {shouldDisplayNoSourcesModal && <NoSourcesModal />}
-
-      {shouldDisplaySourcesIncompleteModal && (
-        <NoCompleteSourcesModal ccPairs={ccPairs} />
+      <HealthCheckBanner />
+      <InstantSSRAutoRefresh />
+      {shouldShowWelcomeModal && (
+        <WelcomeModal user={user} requestCookies={requestCookies} />
       )}
-
       {/* ChatPopup is a custom popup that displays a admin-specified message on initial user visit. 
       Only used in the EE version of the app. */}
       <ChatPopup />
-
-      <InstantSSRAutoRefresh />
-
-      <div className="px-24 pt-10 flex flex-col items-center min-h-screen">
-        <div className="w-full">
-          <SearchSection
-            ccPairs={ccPairs}
-            documentSets={documentSets}
-            personas={personas}
-            tags={tags}
-            defaultSearchType={searchTypeDefault}
-          />
-        </div>
-      </div>
+      <SearchProvider
+        value={{
+          querySessions,
+          ccPairs,
+          documentSets,
+          assistants,
+          tags,
+          agenticSearchEnabled,
+          disabledAgentic: DISABLE_LLM_DOC_RELEVANCE,
+          initiallyToggled: toggleSidebar,
+          shouldShowWelcomeModal,
+          shouldDisplayNoSources: shouldDisplayNoSourcesModal,
+        }}
+      >
+        <WrappedSearch
+          initiallyToggled={toggleSidebar}
+          searchTypeDefault={searchTypeDefault}
+        />
+      </SearchProvider>
     </>
   );
 }

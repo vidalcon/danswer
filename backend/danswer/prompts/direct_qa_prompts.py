@@ -7,7 +7,6 @@ from danswer.prompts.constants import FINAL_QUERY_PAT
 from danswer.prompts.constants import GENERAL_SEP_PAT
 from danswer.prompts.constants import QUESTION_PAT
 from danswer.prompts.constants import THOUGHT_PAT
-from danswer.prompts.constants import UNCERTAINTY_PAT
 
 
 ONE_SHOT_SYSTEM_PROMPT = """
@@ -66,9 +65,6 @@ EMPTY_SAMPLE_JSON = {
 }
 
 
-ANSWER_NOT_FOUND_RESPONSE = f'{{"answer": "{UNCERTAINTY_PAT}", "quotes": []}}'
-
-
 # Default json prompt which can reference multiple docs and provide answer + quotes
 # system_like_header is similar to system message, can be user provided or defaults to QA_HEADER
 # context/history blocks are for context documents and conversation history, they can be blank
@@ -76,7 +72,8 @@ ANSWER_NOT_FOUND_RESPONSE = f'{{"answer": "{UNCERTAINTY_PAT}", "quotes": []}}'
 JSON_PROMPT = f"""
 {{system_prompt}}
 {REQUIRE_JSON}
-{{context_block}}{{history_block}}{{task_prompt}}
+{{context_block}}{{history_block}}
+{{task_prompt}}
 
 SAMPLE RESPONSE:
 ```
@@ -95,6 +92,7 @@ SAMPLE RESPONSE:
 # "conversation history" block
 CITATIONS_PROMPT = f"""
 Refer to the following context documents when responding to me.{DEFAULT_IGNORE_STATEMENT}
+
 CONTEXT:
 {GENERAL_SEP_PAT}
 {{context_docs_str}}
@@ -113,7 +111,7 @@ CITATIONS_PROMPT_FOR_TOOL_CALLING = f"""
 Refer to the provided context documents when responding to me.{DEFAULT_IGNORE_STATEMENT} \
 You should always get right to the point, and never use extraneous language.
 
-{{task_prompt}}
+{{history_block}}{{task_prompt}}
 
 {QUESTION_PAT.upper()}
 {{user_query}}

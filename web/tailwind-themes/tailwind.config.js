@@ -1,4 +1,5 @@
 /** @type {import('tailwindcss').Config} */
+
 module.exports = {
   darkMode: "class",
   content: [
@@ -12,13 +13,40 @@ module.exports = {
     // tremor
     "./node_modules/@tremor/**/*.{js,ts,jsx,tsx}",
   ],
+
   theme: {
     transparent: "transparent",
     current: "currentColor",
     extend: {
+      transitionProperty: {
+        spacing: "margin, padding",
+      },
+
+      keyframes: {
+        "subtle-pulse": {
+          "0%, 100%": { opacity: 0.9 },
+          "50%": { opacity: 0.5 },
+        },
+        pulse: {
+          "0%, 100%": { opacity: 0.9 },
+          "50%": { opacity: 0.4 },
+        },
+      },
+      animation: {
+        "fade-in-up": "fadeInUp 0.5s ease-out",
+        "subtle-pulse": "subtle-pulse 2s ease-in-out infinite",
+        pulse: "pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+      },
+
+      gradientColorStops: {
+        "neutral-10": "#e5e5e5 5%",
+      },
       screens: {
         "2xl": "1420px",
         "3xl": "1700px",
+        "4xl": "2000px",
+        mobile: { max: "767px" },
+        desktop: "768px",
       },
       fontFamily: {
         sans: ["var(--font-inter)"],
@@ -32,87 +60,171 @@ module.exports = {
         searchbar: "850px",
         "document-sidebar": "800px",
         "document-sidebar-large": "1000px",
+        "searchbar-max": "60px",
       },
       maxWidth: {
         "document-sidebar": "1000px",
+        "message-max": "850px",
+        "content-max": "725px",
+        "searchbar-max": "800px",
       },
       colors: {
-        // background
-        background: "#f9fafb", // gray-50
-        "background-subtle": "#e5e7eb", // gray-200
-        "background-emphasis": "#f6f7f8",
-        "background-strong": "#eaecef",
-        "background-search": "#ffffff",
-        "background-custom-header": "#f3f4f6",
-        "background-inverted": "#000000",
-        "background-weak": "#f3f4f6", // gray-100
-        "background-dark": "#111827", // gray-900
+        // code styling
+        "code-bg": "var(--black)",
+        "code-text": "var(--code-text)",
+        "token-comment": "var(--token-comment)",
+        "token-punctuation": "var(--token-punctuation)",
+        "token-property": "var(--token-property)",
+        "token-selector": "var(--token-selector)",
+        "token-atrule": "var(--token-atrule)",
+        "token-function": "var(--token-function)",
+        "token-regex": "var(--token-regex)",
+        "token-attr-name": "var(--token-attr-name)",
+        "non-selectable": "var(--non-selectable)",
 
-        // text or icons
-        light: "#e5e7eb", // gray-200
-        link: "#3b82f6", // blue-500
-        "link-hover": "#1d4ed8", // blue-700
-        subtle: "#6b7280", // gray-500
-        default: "#4b5563", // gray-600
-        emphasis: "#374151", // gray-700
-        strong: "#111827", // gray-900
-        inverted: "#ffffff", // white
-        error: "#ef4444", // red-500
-        success: "#059669", // emerald-600
-        alert: "#f59e0b", // amber-600
-        accent: "#6671d0",
+        // background
+        background: "var(--background)",
+        "background-100": "var(--background-100)",
+        "background-125": "var(--background-125)",
+        "background-150": "var(--background-150)",
+        "background-200": "var(--background-200)",
+        "background-300": "var(--background-300)",
+        "background-400": "var(--background-400)",
+        "background-500": "var(--background-500)",
+        "background-600": "var(--background-600)",
+        "background-700": "var(--background-700)",
+        "background-800": "var(--background-800)",
+        "background-900": "var(--background-900)",
+
+        "background-inverted": "var(--background-inverted)",
+        "background-emphasis": "var(--background-emphasis)",
+        "background-strong": "var(--background-strong)",
+        "background-search": "var(--white)",
+
+        // colors for sidebar in chat, search, and manage settings
+        "background-sidebar": "var(--background-100)",
+        "background-chatbar": "var(--background-100)",
+        "text-sidebar": "var(--text-500)",
+
+        "toggled-background": "var(--background-400)",
+        "untoggled-background": "var(--background-200)",
+
+        "background-back-button": "var(--background-200)",
+        "text-back-button": "var(--text-800)",
+
+        // Settings
+        "text-sidebar-subtle": "var(--text-500)",
+        "icon-settings-sidebar": "var(--text-600)",
+        "text-settings-sidebar": "var(--text-600)",
+        "text-settings-sidebar-strong": "var(--text-900)",
+        "background-settings-hover": "var(--background-200)",
+
+        "background-chat-hover": "var(--background-200)",
+        "background-chat-selected": "var(--background-200)",
+
+        // Background for chat messages (user bubbles)
+        user: "var(--user-bubble)",
+
+        "background-toggle": "var(--background-100)",
+
+        // Colors for the search toggle buttons
+        "background-agentic-toggled": "var(--light-success)",
+        "background-agentic-untoggled": "var(--undo)",
+        "text-agentic-toggled": "var(--text-800)",
+        "text-agentic-untoggled": "var(--white)",
+        "text-chatbar-subtle": "var(--text-500)",
+        "text-chatbar": "var(--text-800)",
+
+        // Color for the star indicator on high quality search results.
+        "star-indicator": "var(--background-100)",
+
+        // Backgrounds for submit buttons on search and chat
+        "submit-background": "var(--background-800)",
+        "disabled-submit-background": "var(--background-400)",
+
+        input: "var(--white)",
+
+        "text-50": "var(--text-50)",
+        "text-100": "var(--text-100)",
+        "text-200": "var(--text-200)",
+        "text-300": "var(--text-300)",
+        "text-400": "var(--text-400)",
+        "text-500": "var(--text-500)",
+        "text-600": "var(--text-600)",
+        "text-700": "var(--text-700)",
+        "text-800": "var(--text-800)",
+        "text-900": "var(--text-900)",
+        "text-950": "var(--text-950)",
+
+        "user-text": "var(--text-800)",
+
+        description: "var(--text-400)",
+        subtle: "var(--text-500)",
+        default: "var(--text-600)",
+        emphasis: "var(--text-700)",
+        strong: "var(--text-900)",
 
         // borders
-        border: "#e5e7eb", // gray-200
-        "border-light": "#f3f4f6", // gray-100
-        "border-medium": "#d1d5db", // gray-300
-        "border-strong": "#9ca3af", // gray-400
+        border: "var(--border)",
+        "border-light": "var(--border-light)",
+        "border-medium": "var(--border-medium)",
+        "border-strong": "var(--border-strong)",
+        "border-dark": "var(--border-dark)",
+        "non-selectable-border": "#f5c2c7",
+
+        inverted: "var(--white)",
+        link: "var(--link)",
+        "link-hover": "var(--link-hover)",
+
+        // one offs
+        error: "var(--error)",
+        success: "var(--success)",
+        alert: "var(--alert)",
+        accent: "var(--accent)",
 
         // hover
-        "hover-light": "#f3f4f6", // gray-100
-        hover: "#e5e7eb", // gray-200
-        "hover-emphasis": "#d1d5db", // gray-300
-        "accent-hover": "#5964c2",
+        "hover-light": "var(--background-100)",
+        "hover-lightish": "var(--background-125)",
+
+        hover: "var(--background-200)",
+        "hover-emphasis": "var(--background-300)",
+        "accent-hover": "var(--accent-hover)",
 
         // keyword highlighting
         highlight: {
-          text: "#fef9c3", // yellow-100
+          text: "var(--highlight-text)",
         },
 
         // scrollbar
         scrollbar: {
-          track: "#f9fafb",
-          thumb: "#e5e7eb",
-          "thumb-hover": "#d1d5db",
+          track: "var(--scrollbar-track)",
+          thumb: "var(--scrollbar-thumb)",
+          "thumb-hover": "var(--scrollbar-thumb-hover)",
 
           dark: {
-            thumb: "#989a9c",
-            "thumb-hover": "#c7cdd2",
+            thumb: "var(--scrollbar-dark-thumb)",
+            "thumb-hover": "var(--scrollbar-dark-thumb-hover)",
           },
         },
 
-        // bubbles in chat for each "user"
-        user: "#fb7185", // yellow-400
-        ai: "#60a5fa", // blue-400
-
         // for display documents
-        document: "#ec4899", // pink-500
+        document: "var(--document-color)",
 
         // light mode
         tremor: {
           brand: {
-            faint: "#eff6ff", // blue-50
-            muted: "#bfdbfe", // blue-200
-            subtle: "#60a5fa", // blue-400
+            faint: "var(--tremor-brand-faint)",
+            muted: "var(--tremor-brand-muted)",
+            subtle: "var(--tremor-brand-subtle)",
             DEFAULT: "#3b82f6", // blue-500
-            emphasis: "#1d4ed8", // blue-700
-            inverted: "#ffffff", // white
+            emphasis: "var(--tremor-brand-emphasis)",
+            inverted: "var(--tremor-brand-inverted)",
           },
           background: {
-            muted: "#f9fafb", // gray-50
-            subtle: "#f3f4f6", // gray-100
+            muted: "var(--tremor-background-muted)",
+            subtle: "var(--tremor-background-subtle)",
             DEFAULT: "#ffffff", // white
-            emphasis: "#374151", // gray-700
+            emphasis: "var(--tremor-background-emphasis)",
           },
           border: {
             DEFAULT: "#e5e7eb", // gray-200
@@ -121,28 +233,28 @@ module.exports = {
             DEFAULT: "#e5e7eb", // gray-200
           },
           content: {
-            subtle: "#9ca3af", // gray-400
-            DEFAULT: "#4b5563", // gray-600
-            emphasis: "#374151", // gray-700
-            strong: "#111827", // gray-900
-            inverted: "#ffffff", // white
+            subtle: "var(--tremor-content-subtle)",
+            DEFAULT: "var(--tremor-content-default)",
+            emphasis: "var(--tremor-content-emphasis)",
+            strong: "var(--tremor-content-strong)",
+            inverted: "var(--tremor-content-inverted)",
           },
         },
         // dark mode
         "dark-tremor": {
           brand: {
-            faint: "#0B1229", // custom
-            muted: "#172554", // blue-950
-            subtle: "#1e40af", // blue-800
+            faint: "var(--dark-tremor-brand-faint)",
+            muted: "var(--dark-tremor-brand-muted)",
+            subtle: "var(--dark-tremor-brand-subtle)",
             DEFAULT: "#3b82f6", // blue-500
-            emphasis: "#60a5fa", // blue-400
-            inverted: "#030712", // gray-950
+            emphasis: "var(--dark-tremor-brand-emphasis)",
+            inverted: "var(--dark-tremor-brand-inverted)",
           },
           background: {
-            muted: "#131A2B", // custom
-            subtle: "#1f2937", // gray-800
-            DEFAULT: "#111827", // gray-900
-            emphasis: "#d1d5db", // gray-300
+            muted: "var(--dark-tremor-background-muted)",
+            subtle: "var(--dark-tremor-background-subtle)",
+            DEFAULT: "var(--dark-tremor-background-default)",
+            emphasis: "var(--dark-tremor-background-emphasis)",
           },
           border: {
             DEFAULT: "#1f2937", // gray-800
@@ -151,11 +263,11 @@ module.exports = {
             DEFAULT: "#1f2937", // gray-800
           },
           content: {
-            subtle: "#6b7280", // gray-500
-            DEFAULT: "#d1d5db", // gray-300
-            emphasis: "#f3f4f6", // gray-100
-            strong: "#f9fafb", // gray-50
-            inverted: "#000000", // black
+            subtle: "var(--dark-tremor-content-subtle)",
+            DEFAULT: "var(--dark-tremor-content-default)",
+            emphasis: "var(--dark-tremor-content-emphasis)",
+            strong: "var(--dark-tremor-content-strong)",
+            inverted: "var(--dark-tremor-content-inverted)",
           },
         },
       },
@@ -179,10 +291,18 @@ module.exports = {
         "tremor-full": "9999px",
       },
       fontSize: {
+        "code-sm": "small",
         "tremor-label": ["0.75rem"],
         "tremor-default": ["0.875rem", { lineHeight: "1.25rem" }],
         "tremor-title": ["1.125rem", { lineHeight: "1.75rem" }],
         "tremor-metric": ["1.875rem", { lineHeight: "2.25rem" }],
+      },
+      fontWeight: {
+        description: "375",
+        "token-bold": "bold",
+      },
+      fontStyle: {
+        "token-italic": "italic",
       },
     },
   },

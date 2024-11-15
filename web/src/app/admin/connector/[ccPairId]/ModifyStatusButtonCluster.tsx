@@ -1,11 +1,11 @@
 "use client";
 
-import { Button } from "@tremor/react";
-import { CCPairFullInfo } from "./types";
+import { Button } from "@/components/ui/button";
+import { CCPairFullInfo, ConnectorCredentialPairStatus } from "./types";
 import { usePopup } from "@/components/admin/connectors/Popup";
-import { disableConnector } from "@/lib/connector";
 import { mutate } from "swr";
 import { buildCCPairInfoUrl } from "./lib";
+import { setCCPairStatus } from "@/lib/ccPair";
 
 export function ModifyStatusButtonCluster({
   ccPair,
@@ -17,13 +17,15 @@ export function ModifyStatusButtonCluster({
   return (
     <>
       {popup}
-      {ccPair.connector.disabled ? (
+      {ccPair.status === ConnectorCredentialPairStatus.PAUSED ? (
         <Button
-          color="green"
-          size="xs"
+          variant="success-reverse"
           onClick={() =>
-            disableConnector(ccPair.connector, setPopup, () =>
-              mutate(buildCCPairInfoUrl(ccPair.id))
+            setCCPairStatus(
+              ccPair.id,
+              ConnectorCredentialPairStatus.ACTIVE,
+              setPopup,
+              () => mutate(buildCCPairInfoUrl(ccPair.id))
             )
           }
           tooltip="Click to start indexing again!"
@@ -32,11 +34,13 @@ export function ModifyStatusButtonCluster({
         </Button>
       ) : (
         <Button
-          color="red"
-          size="xs"
+          variant="default"
           onClick={() =>
-            disableConnector(ccPair.connector, setPopup, () =>
-              mutate(buildCCPairInfoUrl(ccPair.id))
+            setCCPairStatus(
+              ccPair.id,
+              ConnectorCredentialPairStatus.PAUSED,
+              setPopup,
+              () => mutate(buildCCPairInfoUrl(ccPair.id))
             )
           }
           tooltip={

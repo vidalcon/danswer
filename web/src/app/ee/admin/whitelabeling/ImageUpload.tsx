@@ -1,6 +1,5 @@
 import { SubLabel } from "@/components/admin/connectors/Field";
 import { usePopup } from "@/components/admin/connectors/Popup";
-import { Text } from "@tremor/react";
 import { useEffect, useState } from "react";
 import Dropzone from "react-dropzone";
 
@@ -62,7 +61,11 @@ export function ImageUpload({
             {tmpImageUrl && (
               <div className="mt-4 mb-8">
                 <SubLabel>Uploaded Image:</SubLabel>
-                <img src={tmpImageUrl} className="mt-4 max-w-xs max-h-64" />
+                <img
+                  alt="Uploaded Image"
+                  src={tmpImageUrl}
+                  className="mt-4 max-w-xs max-h-64"
+                />
               </div>
             )}
           </section>

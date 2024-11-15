@@ -12,7 +12,10 @@ import {
   useUsers,
 } from "@/lib/hooks";
 import { AdminPageTitle } from "@/components/admin/Title";
-import { Button, Divider } from "@tremor/react";
+import { Button } from "@/components/ui/button";
+
+import { useUser } from "@/components/user/UserProvider";
+import { Separator } from "@/components/ui/separator";
 
 const Main = () => {
   const { popup, setPopup } = usePopup();
@@ -31,6 +34,11 @@ const Main = () => {
     isLoading: userIsLoading,
     error: usersError,
   } = useUsers();
+
+  const { isLoadingUser, isAdmin } = useUser();
+  if (isLoadingUser) {
+    return <></>;
+  }
 
   if (isLoading || isCCPairsLoading || userIsLoading) {
     return <ThreeDotsLoader />;
@@ -51,14 +59,19 @@ const Main = () => {
   return (
     <>
       {popup}
-      <div className="my-3">
-        <Button size="xs" color="green" onClick={() => setShowForm(true)}>
-          Create New User Group
-        </Button>
-      </div>
+      {isAdmin && (
+        <div className="my-3">
+          <Button
+            size="sm"
+            variant="navigate"
+            onClick={() => setShowForm(true)}
+          >
+            Create New User Group
+          </Button>
+        </div>
+      )}
       {data.length > 0 && (
         <div>
-          <Divider />
           <UserGroupsTable
             userGroups={data}
             setPopup={setPopup}
@@ -85,7 +98,7 @@ const Page = () => {
   return (
     <div className="mx-auto container">
       <AdminPageTitle
-        title="Manage Users Groups"
+        title="Manage User Groups"
         icon={<GroupsIcon size={32} />}
       />
 

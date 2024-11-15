@@ -1,14 +1,13 @@
 import { Button } from "@/components/Button";
 import { SearchMultiSelectDropdown } from "@/components/Dropdown";
 import { Modal } from "@/components/Modal";
-import { UsersIcon } from "@/components/icons/icons";
 import { useState } from "react";
 import { FiPlus, FiX } from "react-icons/fi";
 import { updateUserGroup } from "./lib";
 import { PopupSpec } from "@/components/admin/connectors/Popup";
-import { Connector, ConnectorIndexingStatus, UserGroup } from "@/lib/types";
+import { ConnectorIndexingStatus, UserGroup } from "@/lib/types";
 import { ConnectorTitle } from "@/components/admin/connectors/ConnectorTitle";
-
+import { Connector } from "@/lib/connectors/connectors";
 interface AddConnectorFormProps {
   ccPairs: ConnectorIndexingStatus<any, any>[];
   userGroup: UserGroup;
@@ -76,7 +75,7 @@ export const AddConnectorForm: React.FC<AddConnectorFormProps> = ({
                     .includes(ccPair.cc_pair_id)
               )
               // remove public docs, since they don't make sense as part of a group
-              .filter((ccPair) => !ccPair.public_doc)
+              .filter((ccPair) => !(ccPair.access_type === "public"))
               .map((ccPair) => {
                 return {
                   name: ccPair.name?.toString() || "",

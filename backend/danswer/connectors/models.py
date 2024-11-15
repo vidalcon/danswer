@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from danswer.configs.constants import DocumentSource
 from danswer.configs.constants import INDEX_SEPARATOR
+from danswer.configs.constants import RETURN_SEPARATOR
 from danswer.utils.text_processing import make_url_compatible
 
 
@@ -13,7 +14,7 @@ class InputType(str, Enum):
     LOAD_STATE = "load_state"  # e.g. loading a current full state or a save state, such as from a file
     POLL = "poll"  # e.g. calling an API to get all documents in the last hour
     EVENT = "event"  # e.g. registered an endpoint as a listener, and processing connector events
-    PRUNE = "prune"
+    SLIM_RETRIEVAL = "slim_retrieval"
 
 
 class ConnectorMissingCredentialError(PermissionError):
@@ -112,12 +113,22 @@ class DocumentBase(BaseModel):
     # The default title is semantic_identifier though unless otherwise specified
     title: str | None = None
     from_ingestion_api: bool = False
+    # Anything else that may be useful that is specific to this particular connector type that other
+    # parts of the code may need. If you're unsure, this can be left as None
+    additional_info: Any = None
 
-    def get_title_for_document_index(self) -> str | None:
+    def get_title_for_document_index(
+        self,
+    ) -> str | None:
         # If title is explicitly empty, return a None here for embedding purposes
         if self.title == "":
             return None
-        return self.semantic_identifier if self.title is None else self.title
+        replace_chars = set(RETURN_SEPARATOR)
+        title = self.semantic_identifier if self.title is None else self.title
+        for char in replace_chars:
+            title = title.replace(char, " ")
+        title = title.strip()
+        return title
 
     def get_metadata_str_attributes(self) -> list[str] | None:
         if not self.metadata:
@@ -158,6 +169,41 @@ class Document(DocumentBase):
         )
 
 
+class SlimDocument(BaseModel):
+    id: str
+    perm_sync_data: Any | None = None
+
+
+class DocumentErrorSummary(BaseModel):
+    id: str
+    semantic_id: str
+    section_link: str | None
+
+    @classmethod
+    def from_document(cls, doc: Document) -> "DocumentErrorSummary":
+        section_link = doc.sections[0].link if len(doc.sections) > 0 else None
+        return cls(
+            id=doc.id, semantic_id=doc.semantic_identifier, section_link=section_link
+        )
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "DocumentErrorSummary":
+        return cls(
+            id=str(data.get("id")),
+            semantic_id=str(data.get("semantic_id")),
+            section_link=str(data.get("section_link")),
+        )
+
+    def to_dict(self) -> dict[str, str | None]:
+        return {
+            "id": self.id,
+            "semantic_id": self.semantic_id,
+            "section_link": self.section_link,
+        }
+
+
 class IndexAttemptMetadata(BaseModel):
+    batch_num: int | None = None
+    num_exceptions: int = 0
     connector_id: int
     credential_id: int

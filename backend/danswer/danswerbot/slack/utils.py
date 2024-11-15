@@ -3,7 +3,6 @@ import random
 import re
 import string
 import time
-from collections.abc import MutableMapping
 from typing import Any
 from typing import cast
 from typing import Optional
@@ -13,7 +12,7 @@ from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 from slack_sdk.models.blocks import Block
 from slack_sdk.models.metadata import Metadata
-from sqlalchemy.orm import Session
+from slack_sdk.socket_mode import SocketModeClient
 
 from danswer.configs.app_configs import DISABLE_TELEMETRY
 from danswer.configs.constants import ID_SEPARATOR
@@ -22,12 +21,17 @@ from danswer.configs.danswerbot_configs import DANSWER_BOT_FEEDBACK_VISIBILITY
 from danswer.configs.danswerbot_configs import DANSWER_BOT_MAX_QPM
 from danswer.configs.danswerbot_configs import DANSWER_BOT_MAX_WAIT_TIME
 from danswer.configs.danswerbot_configs import DANSWER_BOT_NUM_RETRIES
+from danswer.configs.danswerbot_configs import (
+    DANSWER_BOT_RESPONSE_LIMIT_PER_TIME_PERIOD,
+)
+from danswer.configs.danswerbot_configs import (
+    DANSWER_BOT_RESPONSE_LIMIT_TIME_PERIOD_SECONDS,
+)
 from danswer.connectors.slack.utils import make_slack_api_rate_limited
 from danswer.connectors.slack.utils import SlackTextCleaner
 from danswer.danswerbot.slack.constants import FeedbackVisibility
-from danswer.danswerbot.slack.constants import SLACK_CHANNEL_ID
 from danswer.danswerbot.slack.tokens import fetch_tokens
-from danswer.db.engine import get_sqlalchemy_engine
+from danswer.db.engine import get_session_with_tenant
 from danswer.db.users import get_user_by_email
 from danswer.llm.exceptions import GenAIDisabledException
 from danswer.llm.factory import get_default_llms
@@ -43,7 +47,41 @@ from danswer.utils.text_processing import replace_whitespaces_w_space
 logger = setup_logger()
 
 
-DANSWER_BOT_APP_ID: str | None = None
+_DANSWER_BOT_APP_ID: str | None = None
+_DANSWER_BOT_MESSAGE_COUNT: int = 0
+_DANSWER_BOT_COUNT_START_TIME: float = time.time()
+
+
+def get_danswer_bot_app_id(web_client: WebClient) -> Any:
+    global _DANSWER_BOT_APP_ID
+    if _DANSWER_BOT_APP_ID is None:
+        _DANSWER_BOT_APP_ID = web_client.auth_test().get("user_id")
+    return _DANSWER_BOT_APP_ID
+
+
+def check_message_limit() -> bool:
+    """
+    This isnt a perfect solution.
+    High traffic at the end of one period and start of another could cause
+    the limit to be exceeded.
+    """
+    if DANSWER_BOT_RESPONSE_LIMIT_PER_TIME_PERIOD == 0:
+        return True
+    global _DANSWER_BOT_MESSAGE_COUNT
+    global _DANSWER_BOT_COUNT_START_TIME
+    time_since_start = time.time() - _DANSWER_BOT_COUNT_START_TIME
+    if time_since_start > DANSWER_BOT_RESPONSE_LIMIT_TIME_PERIOD_SECONDS:
+        _DANSWER_BOT_MESSAGE_COUNT = 0
+        _DANSWER_BOT_COUNT_START_TIME = time.time()
+    if (_DANSWER_BOT_MESSAGE_COUNT + 1) > DANSWER_BOT_RESPONSE_LIMIT_PER_TIME_PERIOD:
+        logger.error(
+            f"DanswerBot has reached the message limit {DANSWER_BOT_RESPONSE_LIMIT_PER_TIME_PERIOD}"
+            f" for the time period {DANSWER_BOT_RESPONSE_LIMIT_TIME_PERIOD_SECONDS} seconds."
+            " These limits are configurable in backend/danswer/configs/danswerbot_configs.py"
+        )
+        return False
+    _DANSWER_BOT_MESSAGE_COUNT += 1
+    return True
 
 
 def rephrase_slack_message(msg: str) -> str:
@@ -77,43 +115,30 @@ def update_emote_react(
     remove: bool,
     client: WebClient,
 ) -> None:
-    if not message_ts:
-        logger.error(f"Tried to remove a react in {channel} but no message specified")
-        return
+    try:
+        if not message_ts:
+            logger.error(
+                f"Tried to remove a react in {channel} but no message specified"
+            )
+            return
 
-    func = client.reactions_remove if remove else client.reactions_add
-    slack_call = make_slack_api_rate_limited(func)  # type: ignore
-    slack_call(
-        name=emoji,
-        channel=channel,
-        timestamp=message_ts,
-    )
-
-
-def get_danswer_bot_app_id(web_client: WebClient) -> Any:
-    global DANSWER_BOT_APP_ID
-    if DANSWER_BOT_APP_ID is None:
-        DANSWER_BOT_APP_ID = web_client.auth_test().get("user_id")
-    return DANSWER_BOT_APP_ID
+        func = client.reactions_remove if remove else client.reactions_add
+        slack_call = make_slack_api_rate_limited(func)  # type: ignore
+        slack_call(
+            name=emoji,
+            channel=channel,
+            timestamp=message_ts,
+        )
+    except SlackApiError as e:
+        if remove:
+            logger.error(f"Failed to remove Reaction due to: {e}")
+        else:
+            logger.error(f"Was not able to react to user message due to: {e}")
 
 
 def remove_danswer_bot_tag(message_str: str, client: WebClient) -> str:
     bot_tag_id = get_danswer_bot_app_id(web_client=client)
     return re.sub(rf"<@{bot_tag_id}>\s", "", message_str)
-
-
-class ChannelIdAdapter(logging.LoggerAdapter):
-    """This is used to add the channel ID to all log messages
-    emitted in this file"""
-
-    def process(
-        self, msg: str, kwargs: MutableMapping[str, Any]
-    ) -> tuple[str, MutableMapping[str, Any]]:
-        channel_id = self.extra.get(SLACK_CHANNEL_ID) if self.extra else None
-        if channel_id:
-            return f"[Channel ID: {channel_id}] {msg}", kwargs
-        else:
-            return msg, kwargs
 
 
 def get_web_client() -> WebClient:
@@ -136,16 +161,13 @@ def respond_in_thread(
     receiver_ids: list[str] | None = None,
     metadata: Metadata | None = None,
     unfurl: bool = True,
-) -> None:
+) -> list[str]:
     if not text and not blocks:
         raise ValueError("One of `text` or `blocks` must be provided")
 
+    message_ids: list[str] = []
     if not receiver_ids:
         slack_call = make_slack_api_rate_limited(client.chat_postMessage)
-    else:
-        slack_call = make_slack_api_rate_limited(client.chat_postEphemeral)
-
-    if not receiver_ids:
         response = slack_call(
             channel=channel,
             text=text,
@@ -157,7 +179,9 @@ def respond_in_thread(
         )
         if not response.get("ok"):
             raise RuntimeError(f"Failed to post message: {response}")
+        message_ids.append(response["message_ts"])
     else:
+        slack_call = make_slack_api_rate_limited(client.chat_postEphemeral)
         for receiver in receiver_ids:
             response = slack_call(
                 channel=channel,
@@ -171,6 +195,9 @@ def respond_in_thread(
             )
             if not response.get("ok"):
                 raise RuntimeError(f"Failed to post message: {response}")
+            message_ids.append(response["message_ts"])
+
+    return message_ids
 
 
 def build_feedback_id(
@@ -292,7 +319,7 @@ def get_channel_name_from_id(
         raise e
 
 
-def fetch_userids_from_emails(
+def fetch_user_ids_from_emails(
     user_emails: list[str], client: WebClient
 ) -> tuple[list[str], list[str]]:
     user_ids: list[str] = []
@@ -308,57 +335,72 @@ def fetch_userids_from_emails(
     return user_ids, failed_to_find
 
 
-def fetch_userids_from_groups(
-    group_names: list[str], client: WebClient
+def fetch_user_ids_from_groups(
+    given_names: list[str], client: WebClient
 ) -> tuple[list[str], list[str]]:
     user_ids: list[str] = []
     failed_to_find: list[str] = []
-    for group_name in group_names:
-        try:
-            # First, find the group ID from the group name
-            response = client.usergroups_list()
-            groups = {group["name"]: group["id"] for group in response["usergroups"]}
-            group_id = groups.get(group_name)
+    try:
+        response = client.usergroups_list()
+        if not isinstance(response.data, dict):
+            logger.error("Error fetching user groups")
+            return user_ids, given_names
 
-            if group_id:
-                # Fetch user IDs for the group
+        all_group_data = response.data.get("usergroups", [])
+        name_id_map = {d["name"]: d["id"] for d in all_group_data}
+        handle_id_map = {d["handle"]: d["id"] for d in all_group_data}
+        for given_name in given_names:
+            group_id = name_id_map.get(given_name) or handle_id_map.get(
+                given_name.lstrip("@")
+            )
+            if not group_id:
+                failed_to_find.append(given_name)
+                continue
+            try:
                 response = client.usergroups_users_list(usergroup=group_id)
-                user_ids.extend(response["users"])
-            else:
-                failed_to_find.append(group_name)
-        except Exception as e:
-            logger.error(f"Error fetching user IDs for group {group_name}: {str(e)}")
-            failed_to_find.append(group_name)
+                if isinstance(response.data, dict):
+                    user_ids.extend(response.data.get("users", []))
+                else:
+                    failed_to_find.append(given_name)
+            except Exception as e:
+                logger.error(f"Error fetching user group ids: {str(e)}")
+                failed_to_find.append(given_name)
+    except Exception as e:
+        logger.error(f"Error fetching user groups: {str(e)}")
+        failed_to_find = given_names
 
     return user_ids, failed_to_find
 
 
-def fetch_groupids_from_names(
-    names: list[str], client: WebClient
+def fetch_group_ids_from_names(
+    given_names: list[str], client: WebClient
 ) -> tuple[list[str], list[str]]:
-    group_ids: set[str] = set()
+    group_data: list[str] = []
     failed_to_find: list[str] = []
 
     try:
         response = client.usergroups_list()
-        if response.get("ok") and "usergroups" in response.data:
-            all_groups_dicts = response.data["usergroups"]  # type: ignore
-            name_id_map = {d["name"]: d["id"] for d in all_groups_dicts}
-            handle_id_map = {d["handle"]: d["id"] for d in all_groups_dicts}
-            for group in names:
-                if group in name_id_map:
-                    group_ids.add(name_id_map[group])
-                elif group in handle_id_map:
-                    group_ids.add(handle_id_map[group])
-                else:
-                    failed_to_find.append(group)
-        else:
-            # Most likely a Slack App scope issue
+        if not isinstance(response.data, dict):
             logger.error("Error fetching user groups")
+            return group_data, given_names
+
+        all_group_data = response.data.get("usergroups", [])
+
+        name_id_map = {d["name"]: d["id"] for d in all_group_data}
+        handle_id_map = {d["handle"]: d["id"] for d in all_group_data}
+
+        for given_name in given_names:
+            id = handle_id_map.get(given_name.lstrip("@"))
+            id = id or name_id_map.get(given_name)
+            if id:
+                group_data.append(id)
+            else:
+                failed_to_find.append(given_name)
     except Exception as e:
+        failed_to_find = given_names
         logger.error(f"Error fetching user groups: {str(e)}")
 
-    return list(group_ids), failed_to_find
+    return group_data, failed_to_find
 
 
 def fetch_user_semantic_id_from_id(
@@ -388,35 +430,58 @@ def read_slack_thread(
     replies = cast(dict, response.data).get("messages", [])
     for reply in replies:
         if "user" in reply and "bot_id" not in reply:
-            message = remove_danswer_bot_tag(reply["text"], client=client)
-            user_sem_id = fetch_user_semantic_id_from_id(reply["user"], client)
+            message = reply["text"]
+            user_sem_id = (
+                fetch_user_semantic_id_from_id(reply.get("user"), client)
+                or "Unknown User"
+            )
             message_type = MessageType.USER
         else:
             self_app_id = get_danswer_bot_app_id(client)
 
-            # Only include bot messages from Danswer, other bots are not taken in as context
-            if self_app_id != reply.get("user"):
-                continue
+            if reply.get("user") == self_app_id:
+                # DanswerBot response
+                message_type = MessageType.ASSISTANT
+                user_sem_id = "Assistant"
 
-            blocks = reply["blocks"]
-            if len(blocks) <= 1:
-                continue
-
-            # For the old flow, the useful block is the second one after the header block that says AI Answer
-            if reply["blocks"][0]["text"]["text"] == "AI Answer":
-                message = reply["blocks"][1]["text"]["text"]
-            else:
-                # for the new flow, the answer is the first block
-                message = reply["blocks"][0]["text"]["text"]
-
-            if message.startswith("_Filters"):
-                if len(blocks) <= 2:
+                # DanswerBot responses have both text and blocks
+                # The useful content is in the blocks, specifically the first block unless there are
+                # auto-detected filters
+                blocks = reply.get("blocks")
+                if not blocks:
+                    logger.warning(f"DanswerBot response has no blocks: {reply}")
                     continue
-                message = reply["blocks"][2]["text"]["text"]
 
-            user_sem_id = "Assistant"
-            message_type = MessageType.ASSISTANT
+                message = blocks[0].get("text", {}).get("text")
 
+                # If auto-detected filters are on, use the second block for the actual answer
+                # The first block is the auto-detected filters
+                if message.startswith("_Filters"):
+                    if len(blocks) < 2:
+                        logger.warning(f"Only filter blocks found: {reply}")
+                        continue
+                    # This is the DanswerBot answer format, if there is a change to how we respond,
+                    # this will need to be updated to get the correct "answer" portion
+                    message = reply["blocks"][1].get("text", {}).get("text")
+            else:
+                # Other bots are not counted as the LLM response which only comes from Danswer
+                message_type = MessageType.USER
+                bot_user_name = fetch_user_semantic_id_from_id(
+                    reply.get("user"), client
+                )
+                user_sem_id = bot_user_name or "Unknown" + " Bot"
+
+                # For other bots, just use the text as we have no way of knowing that the
+                # useful portion is
+                message = reply.get("text")
+                if not message:
+                    message = blocks[0].get("text", {}).get("text")
+
+            if not message:
+                logger.warning("Skipping Slack thread message, no text found")
+                continue
+
+        message = remove_danswer_bot_tag(message, client=client)
         thread_messages.append(
             ThreadMessage(message=message, sender=user_sem_id, role=message_type)
         )
@@ -424,7 +489,9 @@ def read_slack_thread(
     return thread_messages
 
 
-def slack_usage_report(action: str, sender_id: str | None, client: WebClient) -> None:
+def slack_usage_report(
+    action: str, sender_id: str | None, client: WebClient, tenant_id: str | None
+) -> None:
     if DISABLE_TELEMETRY:
         return
 
@@ -436,7 +503,7 @@ def slack_usage_report(action: str, sender_id: str | None, client: WebClient) ->
         logger.warning("Unable to find sender email")
 
     if sender_email is not None:
-        with Session(get_sqlalchemy_engine()) as db_session:
+        with get_session_with_tenant(tenant_id) as db_session:
             danswer_user = get_user_by_email(email=sender_email, db_session=db_session)
 
     optional_telemetry(
@@ -512,3 +579,9 @@ def get_feedback_visibility() -> FeedbackVisibility:
         return FeedbackVisibility(DANSWER_BOT_FEEDBACK_VISIBILITY.lower())
     except ValueError:
         return FeedbackVisibility.PRIVATE
+
+
+class TenantSocketModeClient(SocketModeClient):
+    def __init__(self, tenant_id: str | None, *args: Any, **kwargs: Any):
+        super().__init__(*args, **kwargs)
+        self.tenant_id = tenant_id

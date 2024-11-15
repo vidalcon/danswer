@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import datetime
 import itertools
+import tempfile
 from collections.abc import Generator
+from collections.abc import Iterator
 from typing import Any
 from typing import ClassVar
 
@@ -19,6 +21,12 @@ from danswer.connectors.interfaces import SecondsSinceUnixEpoch
 from danswer.connectors.mediawiki.family import family_class_dispatch
 from danswer.connectors.models import Document
 from danswer.connectors.models import Section
+from danswer.utils.logger import setup_logger
+
+
+logger = setup_logger()
+
+pywikibot.config.base_dir = tempfile.TemporaryDirectory().name
 
 
 def pywikibot_timestamp_to_utc_datetime(
@@ -74,7 +82,7 @@ def get_doc_from_page(
         sections=sections,
         semantic_identifier=page.title(),
         metadata={"categories": [category.title() for category in page.categories()]},
-        id=page.pageid,
+        id=f"MEDIAWIKI_{page.pageid}_{page.full_url()}",
     )
 
 
@@ -86,7 +94,6 @@ class MediaWikiConnector(LoadConnector, PollConnector):
         categories: The categories to include in the index.
         pages: The pages to include in the index.
         recurse_depth: The depth to recurse into categories. -1 means unbounded recursion.
-        connector_name: The name of the connector.
         language_code: The language code of the wiki.
         batch_size: The batch size for loading documents.
 
@@ -104,7 +111,6 @@ class MediaWikiConnector(LoadConnector, PollConnector):
         categories: list[str],
         pages: list[str],
         recurse_depth: int,
-        connector_name: str,
         language_code: str = "en",
         batch_size: int = INDEX_BATCH_SIZE,
     ) -> None:
@@ -118,16 +124,18 @@ class MediaWikiConnector(LoadConnector, PollConnector):
         self.batch_size = batch_size
 
         # short names can only have ascii letters and digits
-        self.connector_name = connector_name
-        connector_name = "".join(ch for ch in connector_name if ch.isalnum())
-
-        self.family = family_class_dispatch(hostname, connector_name)()
+        self.family = family_class_dispatch(hostname, "WikipediaConnector")()
         self.site = pywikibot.Site(fam=self.family, code=language_code)
         self.categories = [
             pywikibot.Category(self.site, f"Category:{category.replace(' ', '_')}")
             for category in categories
         ]
-        self.pages = [pywikibot.Page(self.site, page) for page in pages]
+
+        self.pages = []
+        for page in pages:
+            if not page:
+                continue
+            self.pages.append(pywikibot.Page(self.site, page))
 
     def load_credentials(self, credentials: dict[str, Any]) -> dict[str, Any] | None:
         """Load credentials for a MediaWiki site.
@@ -173,8 +181,13 @@ class MediaWikiConnector(LoadConnector, PollConnector):
         ]
 
         # Since we can specify both individual pages and categories, we need to iterate over all of them.
-        all_pages = itertools.chain(self.pages, *category_pages)
+        all_pages: Iterator[pywikibot.Page] = itertools.chain(
+            self.pages, *category_pages
+        )
         for page in all_pages:
+            logger.info(
+                f"MediaWikiConnector: title='{page.title()}' url={page.full_url()}"
+            )
             doc_batch.append(
                 get_doc_from_page(page, self.site, self.document_source_type)
             )
@@ -210,7 +223,6 @@ class MediaWikiConnector(LoadConnector, PollConnector):
 if __name__ == "__main__":
     HOSTNAME = "fallout.fandom.com"
     test_connector = MediaWikiConnector(
-        connector_name="Fallout",
         hostname=HOSTNAME,
         categories=["Fallout:_New_Vegas_factions"],
         pages=["Fallout: New Vegas"],
@@ -221,5 +233,7 @@ if __name__ == "__main__":
     print("All docs", all_docs)
     current = datetime.datetime.now().timestamp()
     one_day_ago = current - 30 * 24 * 60 * 60  # 30 days
+
     latest_docs = list(test_connector.poll_source(one_day_ago, current))
+
     print("Latest docs", latest_docs)

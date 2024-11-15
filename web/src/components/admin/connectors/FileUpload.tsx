@@ -1,3 +1,4 @@
+import { useFormikContext } from "formik";
 import { FC, useState } from "react";
 import React from "react";
 import Dropzone from "react-dropzone";
@@ -6,14 +7,17 @@ interface FileUploadProps {
   selectedFiles: File[];
   setSelectedFiles: (files: File[]) => void;
   message?: string;
+  name?: string;
 }
 
 export const FileUpload: FC<FileUploadProps> = ({
+  name,
   selectedFiles,
   setSelectedFiles,
   message,
 }) => {
   const [dragActive, setDragActive] = useState(false);
+  const { setFieldValue } = useFormikContext();
 
   return (
     <div>
@@ -21,6 +25,9 @@ export const FileUpload: FC<FileUploadProps> = ({
         onDrop={(acceptedFiles) => {
           setSelectedFiles(acceptedFiles);
           setDragActive(false);
+          if (name) {
+            setFieldValue(name, acceptedFiles);
+          }
         }}
         onDragLeave={() => setDragActive(false)}
         onDragEnter={() => setDragActive(true)}
@@ -47,7 +54,7 @@ export const FileUpload: FC<FileUploadProps> = ({
 
       {selectedFiles.length > 0 && (
         <div className="mt-4">
-          <h2 className="font-bold">Selected Files</h2>
+          <h2 className="text-sm font-bold">Selected Files</h2>
           <ul>
             {selectedFiles.map((file) => (
               <div key={file.name} className="flex">

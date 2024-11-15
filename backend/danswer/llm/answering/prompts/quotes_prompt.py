@@ -2,9 +2,10 @@ from langchain.schema.messages import HumanMessage
 
 from danswer.chat.models import LlmDoc
 from danswer.configs.chat_configs import LANGUAGE_HINT
-from danswer.configs.chat_configs import MULTILINGUAL_QUERY_EXPANSION
 from danswer.configs.chat_configs import QA_PROMPT_OVERRIDE
+from danswer.db.search_settings import get_multilingual_expansion
 from danswer.llm.answering.models import PromptConfig
+from danswer.llm.utils import message_to_prompt_and_imgs
 from danswer.prompts.direct_qa_prompts import CONTEXT_BLOCK
 from danswer.prompts.direct_qa_prompts import HISTORY_BLOCK
 from danswer.prompts.direct_qa_prompts import JSON_PROMPT
@@ -19,7 +20,6 @@ def _build_weak_llm_quotes_prompt(
     context_docs: list[LlmDoc] | list[InferenceChunk],
     history_str: str,
     prompt: PromptConfig,
-    use_language_hint: bool,
 ) -> HumanMessage:
     """Since Danswer supports a variety of LLMs, this less demanding prompt is provided
     as an option to use with weaker LLMs such as small version, low float precision, quantized,
@@ -48,8 +48,9 @@ def _build_strong_llm_quotes_prompt(
     context_docs: list[LlmDoc] | list[InferenceChunk],
     history_str: str,
     prompt: PromptConfig,
-    use_language_hint: bool,
 ) -> HumanMessage:
+    use_language_hint = bool(get_multilingual_expansion())
+
     context_block = ""
     if context_docs:
         context_docs_str = build_complete_context_str(context_docs)
@@ -75,11 +76,10 @@ def _build_strong_llm_quotes_prompt(
 
 
 def build_quotes_user_message(
-    question: str,
+    message: HumanMessage,
     context_docs: list[LlmDoc] | list[InferenceChunk],
     history_str: str,
     prompt: PromptConfig,
-    use_language_hint: bool = bool(MULTILINGUAL_QUERY_EXPANSION),
 ) -> HumanMessage:
     prompt_builder = (
         _build_weak_llm_quotes_prompt
@@ -87,32 +87,11 @@ def build_quotes_user_message(
         else _build_strong_llm_quotes_prompt
     )
 
+    query, _ = message_to_prompt_and_imgs(message)
+
     return prompt_builder(
-        question=question,
+        question=query,
         context_docs=context_docs,
         history_str=history_str,
         prompt=prompt,
-        use_language_hint=use_language_hint,
-    )
-
-
-def build_quotes_prompt(
-    question: str,
-    context_docs: list[LlmDoc] | list[InferenceChunk],
-    history_str: str,
-    prompt: PromptConfig,
-    use_language_hint: bool = bool(MULTILINGUAL_QUERY_EXPANSION),
-) -> HumanMessage:
-    prompt_builder = (
-        _build_weak_llm_quotes_prompt
-        if QA_PROMPT_OVERRIDE == "weak"
-        else _build_strong_llm_quotes_prompt
-    )
-
-    return prompt_builder(
-        question=question,
-        context_docs=context_docs,
-        history_str=history_str,
-        prompt=prompt,
-        use_language_hint=use_language_hint,
     )

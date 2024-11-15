@@ -4,20 +4,35 @@ import { SlackBotCreationForm } from "../SlackBotConfigCreationForm";
 import { fetchSS } from "@/lib/utilsSS";
 import { ErrorCallout } from "@/components/ErrorCallout";
 import { DocumentSet, SlackBotConfig } from "@/lib/types";
-import { Text } from "@tremor/react";
+import Text from "@/components/ui/text";
 import { BackButton } from "@/components/BackButton";
-import { Persona } from "../../assistants/interfaces";
 import { InstantSSRAutoRefresh } from "@/components/SSRAutoRefresh";
+import {
+  FetchAssistantsResponse,
+  fetchAssistantsSS,
+} from "@/lib/assistants/fetchAssistantsSS";
+import { getStandardAnswerCategoriesIfEE } from "@/components/standardAnswers/getStandardAnswerCategoriesIfEE";
 
-async function Page({ params }: { params: { id: string } }) {
+async function Page(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   const tasks = [
     fetchSS("/manage/admin/slack-bot/config"),
     fetchSS("/manage/document-set"),
-    fetchSS("/persona"),
+    fetchAssistantsSS(),
   ];
 
-  const [slackBotsResponse, documentSetsResponse, personasResponse] =
-    await Promise.all(tasks);
+  const [
+    slackBotsResponse,
+    documentSetsResponse,
+    [assistants, assistantsFetchError],
+  ] = (await Promise.all(tasks)) as [
+    Response,
+    Response,
+    FetchAssistantsResponse,
+  ];
+
+  const eeStandardAnswerCategoryResponse =
+    await getStandardAnswerCategoriesIfEE();
 
   if (!slackBotsResponse.ok) {
     return (
@@ -51,15 +66,14 @@ async function Page({ params }: { params: { id: string } }) {
   }
   const documentSets = (await documentSetsResponse.json()) as DocumentSet[];
 
-  if (!personasResponse.ok) {
+  if (assistantsFetchError) {
     return (
       <ErrorCallout
         errorTitle="Something went wrong :("
-        errorMsg={`Failed to fetch personas - ${await personasResponse.text()}`}
+        errorMsg={`Failed to fetch personas - ${assistantsFetchError}`}
       />
     );
   }
-  const personas = (await personasResponse.json()) as Persona[];
 
   return (
     <div className="container mx-auto">
@@ -78,7 +92,8 @@ async function Page({ params }: { params: { id: string } }) {
 
       <SlackBotCreationForm
         documentSets={documentSets}
-        personas={personas}
+        personas={assistants}
+        standardAnswerCategoryResponse={eeStandardAnswerCategoryResponse}
         existingSlackBotConfig={slackBotConfig}
       />
     </div>

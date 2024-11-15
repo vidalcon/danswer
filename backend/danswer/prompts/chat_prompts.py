@@ -110,8 +110,8 @@ Respond "{SKIP_SEARCH}" if:
 and additional information or details would provide little or no value.
 - The query is some task that does not require additional information to handle.
 
-{GENERAL_SEP_PAT}
 Conversation History:
+{GENERAL_SEP_PAT}
 {{chat_history}}
 {GENERAL_SEP_PAT}
 
@@ -135,13 +135,30 @@ If there is a clear change in topic, disregard the previous messages.
 Strip out any information that is not relevant for the retrieval task.
 If the follow up message is an error or code snippet, repeat the same input back EXACTLY.
 
-{GENERAL_SEP_PAT}
 Chat History:
+{GENERAL_SEP_PAT}
 {{chat_history}}
 {GENERAL_SEP_PAT}
 
 Follow Up Input: {{question}}
 Standalone question (Respond with only the short combined query):
+""".strip()
+
+INTERNET_SEARCH_QUERY_REPHRASE = f"""
+Given the following conversation and a follow up input, rephrase the follow up into a SHORT, \
+standalone query suitable for an internet search engine.
+IMPORTANT: If a specific query might limit results, keep it broad. \
+If a broad query might yield too many results, make it detailed.
+If there is a clear change in topic, ensure the query reflects the new topic accurately.
+Strip out any information that is not relevant for the internet search.
+
+Chat History:
+{GENERAL_SEP_PAT}
+{{chat_history}}
+{GENERAL_SEP_PAT}
+
+Follow Up Input: {{question}}
+Internet Search Query (Respond with a detailed and specific query):
 """.strip()
 
 
@@ -193,6 +210,7 @@ IMPORTANT: TRY NOT TO USE MORE THAN 5 WORDS, MAKE IT AS CONCISE AS POSSIBLE.
 Focus the name on the important keywords to convey the topic of the conversation.
 
 Chat History:
+{GENERAL_SEP_PAT}
 {{chat_history}}
 {GENERAL_SEP_PAT}
 

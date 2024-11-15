@@ -1,7 +1,7 @@
 "use client";
 
 import * as Yup from "yup";
-import { Button } from "@tremor/react";
+import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 import { Modal } from "@/components/Modal";
 import { Form, Formik } from "formik";
@@ -72,7 +72,7 @@ export const CreateRateLimitModal = ({
     <Modal
       title={"Create a Token Rate Limit"}
       onOutsideClick={() => setIsOpen(false)}
-      width="w-2/6"
+      width="max-w-2xl w-full"
     >
       <Formik
         initialValues={{
@@ -116,7 +116,7 @@ export const CreateRateLimitModal = ({
         }}
       >
         {({ isSubmitting, values, setFieldValue }) => (
-          <Form>
+          <Form className="overflow-visible px-2">
             {!forSpecificScope && (
               <SelectorFormField
                 name="target_scope"
@@ -156,17 +156,14 @@ export const CreateRateLimitModal = ({
               type="number"
               placeholder=""
             />
-            <div className="flex">
-              <Button
-                type="submit"
-                size="xs"
-                color="green"
-                disabled={isSubmitting}
-                className="mx-auto w-64"
-              >
-                Create!
-              </Button>
-            </div>
+            <Button
+              type="submit"
+              variant="submit"
+              size="sm"
+              disabled={isSubmitting}
+            >
+              Create!
+            </Button>
           </Form>
         )}
       </Formik>

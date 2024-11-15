@@ -1,7 +1,7 @@
 import base64
 from enum import Enum
 from typing import NotRequired
-from typing import TypedDict
+from typing_extensions import TypedDict  # noreorder
 
 from pydantic import BaseModel
 
@@ -13,6 +13,7 @@ class ChatFileType(str, Enum):
     DOC = "document"
     # Plain text only contain the text
     PLAIN_TEXT = "plain_text"
+    CSV = "csv"
 
 
 class FileDescriptor(TypedDict):

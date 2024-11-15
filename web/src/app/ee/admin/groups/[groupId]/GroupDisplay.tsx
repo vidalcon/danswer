@@ -4,26 +4,40 @@ import { usePopup } from "@/components/admin/connectors/Popup";
 import { useState } from "react";
 import { ConnectorTitle } from "@/components/admin/connectors/ConnectorTitle";
 import { AddMemberForm } from "./AddMemberForm";
-import { updateUserGroup } from "./lib";
+import { updateUserGroup, updateCuratorStatus } from "./lib";
 import { LoadingAnimation } from "@/components/Loading";
-import { ConnectorIndexingStatus, User, UserGroup } from "@/lib/types";
+import {
+  ConnectorIndexingStatus,
+  User,
+  UserGroup,
+  UserRole,
+  USER_ROLE_LABELS,
+} from "@/lib/types";
 import { AddConnectorForm } from "./AddConnectorForm";
+import { Separator } from "@/components/ui/separator";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import Text from "@/components/ui/text";
 import {
   Table,
-  TableHead,
-  TableRow,
-  TableHeaderCell,
   TableBody,
   TableCell,
-  Divider,
-  Button,
-  Text,
-} from "@tremor/react";
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
 import { DeleteButton } from "@/components/DeleteButton";
 import { Bubble } from "@/components/Bubble";
 import { BookmarkIcon, RobotIcon } from "@/components/icons/icons";
 import { AddTokenRateLimitForm } from "./AddTokenRateLimitForm";
 import { GenericTokenRateLimitTable } from "@/app/admin/token-rate-limits/TokenRateLimitTables";
+import { useUser } from "@/components/user/UserProvider";
 
 interface GroupDisplayProps {
   users: User[];
@@ -31,6 +45,82 @@ interface GroupDisplayProps {
   userGroup: UserGroup;
   refreshUserGroup: () => void;
 }
+
+const UserRoleDropdown = ({
+  user,
+  group,
+  onSuccess,
+  onError,
+  isAdmin,
+}: {
+  user: User;
+  group: UserGroup;
+  onSuccess: () => void;
+  onError: (message: string) => void;
+  isAdmin: boolean;
+}) => {
+  const [localRole, setLocalRole] = useState(() => {
+    if (user.role === UserRole.CURATOR) {
+      return group.curator_ids.includes(user.id)
+        ? UserRole.CURATOR
+        : UserRole.BASIC;
+    }
+    return user.role;
+  });
+  const [isSettingRole, setIsSettingRole] = useState(false);
+
+  const handleChange = async (value: string) => {
+    if (value === localRole) return;
+    if (value === UserRole.BASIC || value === UserRole.CURATOR) {
+      setIsSettingRole(true);
+      setLocalRole(value);
+      try {
+        const response = await updateCuratorStatus(group.id, {
+          user_id: user.id,
+          is_curator: value === UserRole.CURATOR,
+        });
+        if (response.ok) {
+          onSuccess();
+          user.role = value;
+        } else {
+          const errorData = await response.json();
+          throw new Error(errorData.detail || "Failed to update user role");
+        }
+      } catch (error: any) {
+        onError(error.message);
+        setLocalRole(user.role);
+      } finally {
+        setIsSettingRole(false);
+      }
+    }
+  };
+
+  const isEditable =
+    (user.role === UserRole.BASIC || user.role === UserRole.CURATOR) && isAdmin;
+
+  if (isEditable) {
+    return (
+      <div className="w-40">
+        Select group
+        <Select
+          value={localRole}
+          onValueChange={handleChange}
+          disabled={isSettingRole}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select role" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={UserRole.BASIC}>Basic</SelectItem>
+            <SelectItem value={UserRole.CURATOR}>Curator</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    );
+  } else {
+    return <div>{USER_ROLE_LABELS[localRole]}</div>;
+  }
+};
 
 export const GroupDisplay = ({
   users,
@@ -42,6 +132,20 @@ export const GroupDisplay = ({
   const [addMemberFormVisible, setAddMemberFormVisible] = useState(false);
   const [addConnectorFormVisible, setAddConnectorFormVisible] = useState(false);
   const [addRateLimitFormVisible, setAddRateLimitFormVisible] = useState(false);
+
+  const { isLoadingUser, isAdmin } = useUser();
+  if (isLoadingUser) {
+    return <></>;
+  }
+
+  const handlePopup = (message: string, type: "success" | "error") => {
+    setPopup({ message, type });
+  };
+
+  const onRoleChangeSuccess = () =>
+    handlePopup("User role updated successfully!", "success");
+  const onRoleChangeError = (errorMsg: string) =>
+    handlePopup(`Unable to update user role - ${errorMsg}`, "error");
 
   return (
     <div>
@@ -58,7 +162,7 @@ export const GroupDisplay = ({
         )}
       </div>
 
-      <Divider />
+      <Separator />
 
       <div className="flex w-full">
         <h2 className="text-xl font-bold">Users</h2>
@@ -68,58 +172,76 @@ export const GroupDisplay = ({
         {userGroup.users.length > 0 ? (
           <>
             <Table className="overflow-visible">
-              <TableHead>
+              <TableHeader>
                 <TableRow>
-                  <TableHeaderCell>Email</TableHeaderCell>
-                  <TableHeaderCell className="flex w-full">
+                  <TableHead>Email</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead className="flex w-full">
                     <div className="ml-auto">Remove User</div>
-                  </TableHeaderCell>
+                  </TableHead>
                 </TableRow>
-              </TableHead>
+              </TableHeader>
               <TableBody>
-                {userGroup.users.map((user) => {
+                {userGroup.users.map((groupMember) => {
                   return (
-                    <TableRow key={user.id}>
+                    <TableRow key={groupMember.id}>
                       <TableCell className="whitespace-normal break-all">
-                        {user.email}
+                        {groupMember.email}
+                      </TableCell>
+                      <TableCell>
+                        <UserRoleDropdown
+                          user={groupMember}
+                          group={userGroup}
+                          onSuccess={onRoleChangeSuccess}
+                          onError={onRoleChangeError}
+                          isAdmin={isAdmin}
+                        />
                       </TableCell>
                       <TableCell>
                         <div className="flex w-full">
                           <div className="ml-auto m-2">
-                            <DeleteButton
-                              onClick={async () => {
-                                const response = await updateUserGroup(
-                                  userGroup.id,
-                                  {
-                                    user_ids: userGroup.users
-                                      .filter(
-                                        (userGroupUser) =>
-                                          userGroupUser.id !== user.id
-                                      )
-                                      .map((userGroupUser) => userGroupUser.id),
-                                    cc_pair_ids: userGroup.cc_pairs.map(
-                                      (ccPair) => ccPair.id
-                                    ),
+                            {(isAdmin ||
+                              !userGroup.curator_ids.includes(
+                                groupMember.id
+                              )) && (
+                              <DeleteButton
+                                onClick={async () => {
+                                  const response = await updateUserGroup(
+                                    userGroup.id,
+                                    {
+                                      user_ids: userGroup.users
+                                        .filter(
+                                          (userGroupUser) =>
+                                            userGroupUser.id !== groupMember.id
+                                        )
+                                        .map(
+                                          (userGroupUser) => userGroupUser.id
+                                        ),
+                                      cc_pair_ids: userGroup.cc_pairs.map(
+                                        (ccPair) => ccPair.id
+                                      ),
+                                    }
+                                  );
+                                  if (response.ok) {
+                                    setPopup({
+                                      message:
+                                        "Successfully removed user from group",
+                                      type: "success",
+                                    });
+                                  } else {
+                                    const responseJson = await response.json();
+                                    const errorMsg =
+                                      responseJson.detail ||
+                                      responseJson.message;
+                                    setPopup({
+                                      message: `Error removing user from group - ${errorMsg}`,
+                                      type: "error",
+                                    });
                                   }
-                                );
-                                if (response.ok) {
-                                  setPopup({
-                                    message:
-                                      "Successfully removed user from group",
-                                    type: "success",
-                                  });
-                                } else {
-                                  const responseJson = await response.json();
-                                  const errorMsg =
-                                    responseJson.detail || responseJson.message;
-                                  setPopup({
-                                    message: `Error removing user from group - ${errorMsg}`,
-                                    type: "error",
-                                  });
-                                }
-                                refreshUserGroup();
-                              }}
-                            />
+                                  refreshUserGroup();
+                                }}
+                              />
+                            )}
                           </div>
                         </div>
                       </TableCell>
@@ -136,8 +258,8 @@ export const GroupDisplay = ({
 
       <Button
         className="mt-3"
-        size="xs"
-        color="green"
+        size="sm"
+        variant="submit"
         onClick={() => setAddMemberFormVisible(true)}
         disabled={!userGroup.is_up_to_date}
       >
@@ -156,21 +278,21 @@ export const GroupDisplay = ({
         />
       )}
 
-      <Divider />
+      <Separator />
 
       <h2 className="text-xl font-bold mt-8">Connectors</h2>
       <div className="mt-2">
         {userGroup.cc_pairs.length > 0 ? (
           <>
             <Table className="overflow-visible">
-              <TableHead>
+              <TableHeader>
                 <TableRow>
-                  <TableHeaderCell>Connector</TableHeaderCell>
-                  <TableHeaderCell className="flex w-full">
+                  <TableHead>Connector</TableHead>
+                  <TableHead className="flex w-full">
                     <div className="ml-auto">Remove Connector</div>
-                  </TableHeaderCell>
+                  </TableHead>
                 </TableRow>
-              </TableHead>
+              </TableHeader>
               <TableBody>
                 {userGroup.cc_pairs.map((ccPair) => {
                   return (
@@ -236,8 +358,8 @@ export const GroupDisplay = ({
       <Button
         className="mt-3"
         onClick={() => setAddConnectorFormVisible(true)}
-        size="xs"
-        color="green"
+        size="sm"
+        variant="submit"
         disabled={!userGroup.is_up_to_date}
       >
         Add Connectors
@@ -255,7 +377,7 @@ export const GroupDisplay = ({
         />
       )}
 
-      <Divider />
+      <Separator />
 
       <h2 className="text-xl font-bold mt-8 mb-2">Document Sets</h2>
 
@@ -280,9 +402,9 @@ export const GroupDisplay = ({
         )}
       </div>
 
-      <Divider />
+      <Separator />
 
-      <h2 className="text-xl font-bold mt-8 mb-2">Personas</h2>
+      <h2 className="text-xl font-bold mt-8 mb-2">Assistants</h2>
 
       <div>
         {userGroup.document_sets.length > 0 ? (
@@ -300,12 +422,12 @@ export const GroupDisplay = ({
           </div>
         ) : (
           <>
-            <Text>No Personas in this group...</Text>
+            <Text>No Assistants in this group...</Text>
           </>
         )}
       </div>
 
-      <Divider />
+      <Separator />
 
       <h2 className="text-xl font-bold mt-8 mb-2">Token Rate Limits</h2>
 
@@ -319,16 +441,19 @@ export const GroupDisplay = ({
       <GenericTokenRateLimitTable
         fetchUrl={`/api/admin/token-rate-limits/user-group/${userGroup.id}`}
         hideHeading
+        isAdmin={isAdmin}
       />
 
-      <Button
-        color="green"
-        size="xs"
-        className="mt-3"
-        onClick={() => setAddRateLimitFormVisible(true)}
-      >
-        Create a Token Rate Limit
-      </Button>
+      {isAdmin && (
+        <Button
+          variant="submit"
+          size="sm"
+          className="mt-3"
+          onClick={() => setAddRateLimitFormVisible(true)}
+        >
+          Create a Token Rate Limit
+        </Button>
+      )}
     </div>
   );
 };

@@ -1,16 +1,21 @@
+from collections.abc import Sequence
 from datetime import datetime
 from datetime import timedelta
 from uuid import UUID
 
 from sqlalchemy import delete
+from sqlalchemy import desc
+from sqlalchemy import func
 from sqlalchemy import nullsfirst
 from sqlalchemy import or_
 from sqlalchemy import select
+from sqlalchemy import update
 from sqlalchemy.exc import MultipleResultsFound
 from sqlalchemy.orm import joinedload
 from sqlalchemy.orm import Session
 
 from danswer.auth.schemas import UserRole
+from danswer.chat.models import DocumentRelevance
 from danswer.configs.chat_configs import HARD_DELETE_CHATS
 from danswer.configs.constants import MessageType
 from danswer.db.models import ChatMessage
@@ -33,11 +38,12 @@ from danswer.server.query_and_chat.models import ChatMessageDetail
 from danswer.tools.tool_runner import ToolCallFinalResult
 from danswer.utils.logger import setup_logger
 
+
 logger = setup_logger()
 
 
 def get_chat_session_by_id(
-    chat_session_id: int,
+    chat_session_id: UUID,
     user_id: UUID | None,
     db_session: Session,
     include_deleted: bool = False,
@@ -67,19 +73,93 @@ def get_chat_session_by_id(
     return chat_session
 
 
+def get_chat_sessions_by_slack_thread_id(
+    slack_thread_id: str,
+    user_id: UUID | None,
+    db_session: Session,
+) -> Sequence[ChatSession]:
+    stmt = select(ChatSession).where(ChatSession.slack_thread_id == slack_thread_id)
+    if user_id is not None:
+        stmt = stmt.where(
+            or_(ChatSession.user_id == user_id, ChatSession.user_id.is_(None))
+        )
+    return db_session.scalars(stmt).all()
+
+
+def get_valid_messages_from_query_sessions(
+    chat_session_ids: list[UUID],
+    db_session: Session,
+) -> dict[UUID, str]:
+    user_message_subquery = (
+        select(
+            ChatMessage.chat_session_id, func.min(ChatMessage.id).label("user_msg_id")
+        )
+        .where(
+            ChatMessage.chat_session_id.in_(chat_session_ids),
+            ChatMessage.message_type == MessageType.USER,
+        )
+        .group_by(ChatMessage.chat_session_id)
+        .subquery()
+    )
+
+    assistant_message_subquery = (
+        select(
+            ChatMessage.chat_session_id,
+            func.min(ChatMessage.id).label("assistant_msg_id"),
+        )
+        .where(
+            ChatMessage.chat_session_id.in_(chat_session_ids),
+            ChatMessage.message_type == MessageType.ASSISTANT,
+        )
+        .group_by(ChatMessage.chat_session_id)
+        .subquery()
+    )
+
+    query = (
+        select(ChatMessage.chat_session_id, ChatMessage.message)
+        .join(
+            user_message_subquery,
+            ChatMessage.chat_session_id == user_message_subquery.c.chat_session_id,
+        )
+        .join(
+            assistant_message_subquery,
+            ChatMessage.chat_session_id == assistant_message_subquery.c.chat_session_id,
+        )
+        .join(
+            ChatMessage__SearchDoc,
+            ChatMessage__SearchDoc.chat_message_id
+            == assistant_message_subquery.c.assistant_msg_id,
+        )
+        .where(ChatMessage.id == user_message_subquery.c.user_msg_id)
+    )
+
+    first_messages = db_session.execute(query).all()
+    logger.info(f"Retrieved {len(first_messages)} first messages with documents")
+
+    return {row.chat_session_id: row.message for row in first_messages}
+
+
 def get_chat_sessions_by_user(
     user_id: UUID | None,
     deleted: bool | None,
     db_session: Session,
-    include_one_shot: bool = False,
+    only_one_shot: bool = False,
+    limit: int = 50,
 ) -> list[ChatSession]:
     stmt = select(ChatSession).where(ChatSession.user_id == user_id)
 
-    if not include_one_shot:
+    if only_one_shot:
+        stmt = stmt.where(ChatSession.one_shot.is_(True))
+    else:
         stmt = stmt.where(ChatSession.one_shot.is_(False))
+
+    stmt = stmt.order_by(desc(ChatSession.time_created))
 
     if deleted is not None:
         stmt = stmt.where(ChatSession.deleted == deleted)
+
+    if limit:
+        stmt = stmt.limit(limit)
 
     result = db_session.execute(stmt)
     chat_sessions = result.scalars().all()
@@ -97,6 +177,12 @@ def delete_search_doc_message_relationship(
     db_session.commit()
 
 
+def delete_tool_call_for_message_id(message_id: int, db_session: Session) -> None:
+    stmt = delete(ToolCall).where(ToolCall.message_id == message_id)
+    db_session.execute(stmt)
+    db_session.commit()
+
+
 def delete_orphaned_search_docs(db_session: Session) -> None:
     orphaned_docs = (
         db_session.query(SearchDoc)
@@ -110,7 +196,7 @@ def delete_orphaned_search_docs(db_session: Session) -> None:
 
 
 def delete_messages_and_files_from_chat_session(
-    chat_session_id: int, db_session: Session
+    chat_session_id: UUID, db_session: Session
 ) -> None:
     # Select messages older than cutoff_time with files
     messages_with_files = db_session.execute(
@@ -120,6 +206,7 @@ def delete_messages_and_files_from_chat_session(
     ).fetchall()
 
     for id, files in messages_with_files:
+        delete_tool_call_for_message_id(message_id=id, db_session=db_session)
         delete_search_doc_message_relationship(message_id=id, db_session=db_session)
         for file_info in files or {}:
             lobj_name = file_info.get("id")
@@ -139,11 +226,12 @@ def create_chat_session(
     db_session: Session,
     description: str,
     user_id: UUID | None,
-    persona_id: int | None = None,
+    persona_id: int | None,  # Can be none if temporary persona is used
     llm_override: LLMOverride | None = None,
     prompt_override: PromptOverride | None = None,
     one_shot: bool = False,
     danswerbot_flow: bool = False,
+    slack_thread_id: str | None = None,
 ) -> ChatSession:
     chat_session = ChatSession(
         user_id=user_id,
@@ -153,6 +241,7 @@ def create_chat_session(
         prompt_override=prompt_override,
         one_shot=one_shot,
         danswerbot_flow=danswerbot_flow,
+        slack_thread_id=slack_thread_id,
     )
 
     db_session.add(chat_session)
@@ -164,7 +253,7 @@ def create_chat_session(
 def update_chat_session(
     db_session: Session,
     user_id: UUID | None,
-    chat_session_id: int,
+    chat_session_id: UUID,
     description: str | None = None,
     sharing_status: ChatSessionSharedStatus | None = None,
 ) -> ChatSession:
@@ -187,10 +276,17 @@ def update_chat_session(
 
 def delete_chat_session(
     user_id: UUID | None,
-    chat_session_id: int,
+    chat_session_id: UUID,
     db_session: Session,
     hard_delete: bool = HARD_DELETE_CHATS,
 ) -> None:
+    chat_session = get_chat_session_by_id(
+        chat_session_id=chat_session_id, user_id=user_id, db_session=db_session
+    )
+
+    if chat_session.deleted:
+        raise ValueError("Cannot delete an already deleted chat session")
+
     if hard_delete:
         delete_messages_and_files_from_chat_session(chat_session_id, db_session)
         db_session.execute(delete(ChatSession).where(ChatSession.id == chat_session_id))
@@ -240,8 +336,41 @@ def get_chat_message(
     return chat_message
 
 
+def get_chat_messages_by_sessions(
+    chat_session_ids: list[UUID],
+    user_id: UUID | None,
+    db_session: Session,
+    skip_permission_check: bool = False,
+) -> Sequence[ChatMessage]:
+    if not skip_permission_check:
+        for chat_session_id in chat_session_ids:
+            get_chat_session_by_id(
+                chat_session_id=chat_session_id, user_id=user_id, db_session=db_session
+            )
+    stmt = (
+        select(ChatMessage)
+        .where(ChatMessage.chat_session_id.in_(chat_session_ids))
+        .order_by(nullsfirst(ChatMessage.parent_message))
+    )
+    return db_session.execute(stmt).scalars().all()
+
+
+def get_search_docs_for_chat_message(
+    chat_message_id: int, db_session: Session
+) -> list[SearchDoc]:
+    stmt = (
+        select(SearchDoc)
+        .join(
+            ChatMessage__SearchDoc, ChatMessage__SearchDoc.search_doc_id == SearchDoc.id
+        )
+        .where(ChatMessage__SearchDoc.chat_message_id == chat_message_id)
+    )
+
+    return list(db_session.scalars(stmt).all())
+
+
 def get_chat_messages_by_session(
-    chat_session_id: int,
+    chat_session_id: UUID,
     user_id: UUID | None,
     db_session: Session,
     skip_permission_check: bool = False,
@@ -259,9 +388,7 @@ def get_chat_messages_by_session(
     )
 
     if prefetch_tool_calls:
-        stmt = stmt.options(joinedload(ChatMessage.tool_calls))
-
-    if prefetch_tool_calls:
+        stmt = stmt.options(joinedload(ChatMessage.tool_call))
         result = db_session.scalars(stmt).unique().all()
     else:
         result = db_session.scalars(stmt).all()
@@ -270,7 +397,7 @@ def get_chat_messages_by_session(
 
 
 def get_or_create_root_message(
-    chat_session_id: int,
+    chat_session_id: UUID,
     db_session: Session,
 ) -> ChatMessage:
     try:
@@ -304,8 +431,36 @@ def get_or_create_root_message(
         return new_root_message
 
 
+def reserve_message_id(
+    db_session: Session,
+    chat_session_id: UUID,
+    parent_message: int,
+    message_type: MessageType,
+) -> int:
+    # Create an empty chat message
+    empty_message = ChatMessage(
+        chat_session_id=chat_session_id,
+        parent_message=parent_message,
+        latest_child_message=None,
+        message="",
+        token_count=0,
+        message_type=message_type,
+    )
+
+    # Add the empty message to the session
+    db_session.add(empty_message)
+
+    # Flush the session to get an ID for the new chat message
+    db_session.flush()
+
+    # Get the ID of the newly created message
+    new_id = empty_message.id
+
+    return new_id
+
+
 def create_new_chat_message(
-    chat_session_id: int,
+    chat_session_id: UUID,
     parent_message: ChatMessage,
     message: str,
     prompt_id: int | None,
@@ -319,30 +474,55 @@ def create_new_chat_message(
     alternate_assistant_id: int | None = None,
     # Maps the citation number [n] to the DB SearchDoc
     citations: dict[int, int] | None = None,
-    tool_calls: list[ToolCall] | None = None,
+    tool_call: ToolCall | None = None,
     commit: bool = True,
+    reserved_message_id: int | None = None,
+    overridden_model: str | None = None,
 ) -> ChatMessage:
-    new_chat_message = ChatMessage(
-        chat_session_id=chat_session_id,
-        parent_message=parent_message.id,
-        latest_child_message=None,
-        message=message,
-        rephrased_query=rephrased_query,
-        prompt_id=prompt_id,
-        token_count=token_count,
-        message_type=message_type,
-        citations=citations,
-        files=files,
-        tool_calls=tool_calls if tool_calls else [],
-        error=error,
-        alternate_assistant_id=alternate_assistant_id,
-    )
+    if reserved_message_id is not None:
+        # Edit existing message
+        existing_message = db_session.query(ChatMessage).get(reserved_message_id)
+        if existing_message is None:
+            raise ValueError(f"No message found with id {reserved_message_id}")
+
+        existing_message.chat_session_id = chat_session_id
+        existing_message.parent_message = parent_message.id
+        existing_message.message = message
+        existing_message.rephrased_query = rephrased_query
+        existing_message.prompt_id = prompt_id
+        existing_message.token_count = token_count
+        existing_message.message_type = message_type
+        existing_message.citations = citations
+        existing_message.files = files
+        existing_message.tool_call = tool_call
+        existing_message.error = error
+        existing_message.alternate_assistant_id = alternate_assistant_id
+        existing_message.overridden_model = overridden_model
+
+        new_chat_message = existing_message
+    else:
+        # Create new message
+        new_chat_message = ChatMessage(
+            chat_session_id=chat_session_id,
+            parent_message=parent_message.id,
+            latest_child_message=None,
+            message=message,
+            rephrased_query=rephrased_query,
+            prompt_id=prompt_id,
+            token_count=token_count,
+            message_type=message_type,
+            citations=citations,
+            files=files,
+            tool_call=tool_call,
+            error=error,
+            alternate_assistant_id=alternate_assistant_id,
+            overridden_model=overridden_model,
+        )
+        db_session.add(new_chat_message)
 
     # SQL Alchemy will propagate this to update the reference_docs' foreign keys
     if reference_docs:
         new_chat_message.search_docs = reference_docs
-
-    db_session.add(new_chat_message)
 
     # Flush the session to get an ID for the new chat message
     db_session.flush()
@@ -418,6 +598,7 @@ def get_doc_query_identifiers_from_model(
     chat_session: ChatSession,
     user_id: UUID | None,
     db_session: Session,
+    enforce_chat_session_id_for_search_docs: bool,
 ) -> list[tuple[str, int]]:
     """Given a list of search_doc_ids"""
     search_docs = (
@@ -437,7 +618,8 @@ def get_doc_query_identifiers_from_model(
                 for doc in search_docs
             ]
         ):
-            raise ValueError("Invalid reference doc, not from this chat session.")
+            if enforce_chat_session_id_for_search_docs:
+                raise ValueError("Invalid reference doc, not from this chat session.")
     except IndexError:
         # This happens when the doc has no chat_messages associated with it.
         # which happens as an edge case where the chat message failed to save
@@ -447,6 +629,27 @@ def get_doc_query_identifiers_from_model(
     doc_query_identifiers = [(doc.document_id, doc.chunk_ind) for doc in search_docs]
 
     return doc_query_identifiers
+
+
+def update_search_docs_table_with_relevance(
+    db_session: Session,
+    reference_db_search_docs: list[SearchDoc],
+    relevance_summary: DocumentRelevance,
+) -> None:
+    for search_doc in reference_db_search_docs:
+        relevance_data = relevance_summary.relevance_summaries.get(
+            search_doc.document_id
+        )
+        if relevance_data is not None:
+            db_session.execute(
+                update(SearchDoc)
+                .where(SearchDoc.id == search_doc.id)
+                .values(
+                    is_relevant=relevance_data.relevant,
+                    relevance_explanation=relevance_data.content,
+                )
+            )
+    db_session.commit()
 
 
 def create_db_search_doc(
@@ -463,17 +666,19 @@ def create_db_search_doc(
         boost=server_search_doc.boost,
         hidden=server_search_doc.hidden,
         doc_metadata=server_search_doc.metadata,
+        is_relevant=server_search_doc.is_relevant,
+        relevance_explanation=server_search_doc.relevance_explanation,
         # For docs further down that aren't reranked, we can't use the retrieval score
         score=server_search_doc.score or 0.0,
         match_highlights=server_search_doc.match_highlights,
         updated_at=server_search_doc.updated_at,
         primary_owners=server_search_doc.primary_owners,
         secondary_owners=server_search_doc.secondary_owners,
+        is_internet=server_search_doc.is_internet,
     )
 
     db_session.add(db_search_doc)
     db_session.commit()
-
     return db_search_doc
 
 
@@ -502,11 +707,14 @@ def translate_db_search_doc_to_server_search_doc(
         match_highlights=(
             db_search_doc.match_highlights if not remove_doc_content else []
         ),
+        relevance_explanation=db_search_doc.relevance_explanation,
+        is_relevant=db_search_doc.is_relevant,
         updated_at=db_search_doc.updated_at if not remove_doc_content else None,
         primary_owners=db_search_doc.primary_owners if not remove_doc_content else [],
         secondary_owners=(
             db_search_doc.secondary_owners if not remove_doc_content else []
         ),
+        is_internet=db_search_doc.is_internet,
     )
 
 
@@ -524,9 +732,11 @@ def get_retrieval_docs_from_chat_message(
 
 
 def translate_db_message_to_chat_message_detail(
-    chat_message: ChatMessage, remove_doc_content: bool = False
+    chat_message: ChatMessage,
+    remove_doc_content: bool = False,
 ) -> ChatMessageDetail:
     chat_msg_detail = ChatMessageDetail(
+        chat_session_id=chat_message.chat_session_id,
         message_id=chat_message.id,
         parent_message=chat_message.parent_message,
         latest_child_message=chat_message.latest_child_message,
@@ -539,15 +749,15 @@ def translate_db_message_to_chat_message_detail(
         time_sent=chat_message.time_sent,
         citations=chat_message.citations,
         files=chat_message.files or [],
-        tool_calls=[
-            ToolCallFinalResult(
-                tool_name=tool_call.tool_name,
-                tool_args=tool_call.tool_arguments,
-                tool_result=tool_call.tool_result,
-            )
-            for tool_call in chat_message.tool_calls
-        ],
+        tool_call=ToolCallFinalResult(
+            tool_name=chat_message.tool_call.tool_name,
+            tool_args=chat_message.tool_call.tool_arguments,
+            tool_result=chat_message.tool_call.tool_result,
+        )
+        if chat_message.tool_call
+        else None,
         alternate_assistant_id=chat_message.alternate_assistant_id,
+        overridden_model=chat_message.overridden_model,
     )
 
     return chat_msg_detail

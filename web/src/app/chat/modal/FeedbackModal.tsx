@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { FeedbackType } from "../types";
-import { FiThumbsDown, FiThumbsUp } from "react-icons/fi";
-import { ModalWrapper } from "./ModalWrapper";
+import { Modal } from "@/components/Modal";
+import { FilledLikeIcon } from "@/components/icons/icons";
 
 const predefinedPositiveFeedbackOptions =
   process.env.NEXT_PUBLIC_POSITIVE_PREDEFINED_FEEDBACK_OPTIONS?.split(",") ||
@@ -49,18 +49,25 @@ export const FeedbackModal = ({
       : predefinedNegativeFeedbackOptions;
 
   return (
-    <ModalWrapper onClose={onClose} modalClassName="max-w-5xl">
+    <Modal onOutsideClick={onClose} width="max-w-3xl">
       <>
         <h2 className="text-2xl text-emphasis font-bold mb-4 flex">
           <div className="mr-1 my-auto">
             {feedbackType === "like" ? (
-              <FiThumbsUp className="text-green-500 my-auto mr-2" />
+              <FilledLikeIcon
+                size={20}
+                className="text-green-500 my-auto mr-2"
+              />
             ) : (
-              <FiThumbsDown className="text-red-600 my-auto mr-2" />
+              <FilledLikeIcon
+                size={20}
+                className="rotate-180 text-red-600 my-auto mr-2"
+              />
             )}
           </div>
           Provide additional feedback
         </h2>
+
         <div className="mb-4 flex flex-wrap justify-start">
           {predefinedFeedbackOptions.map((feedback, index) => (
             <button
@@ -73,6 +80,7 @@ export const FeedbackModal = ({
             </button>
           ))}
         </div>
+
         <textarea
           autoFocus
           className={`
@@ -94,6 +102,7 @@ export const FeedbackModal = ({
           value={message}
           onChange={(e) => setMessage(e.target.value)}
         />
+
         <div className="flex mt-2">
           <button
             className="bg-accent text-white py-2 px-4 rounded hover:bg-blue-600 focus:outline-none mx-auto"
@@ -103,6 +112,6 @@ export const FeedbackModal = ({
           </button>
         </div>
       </>
-    </ModalWrapper>
+    </Modal>
   );
 };
